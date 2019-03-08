@@ -675,13 +675,19 @@ struct Phaseque : Module {
   void copyToNext() {
     int target = patternIdx + 1;
     if (target > NUM_PATTERNS) { target = 1; }
-    patterns[target] = pattern;
+    for (int i = 0; i < NUM_STEPS; i++) {
+      patterns[target].steps[i] = pattern.steps[i];
+    }
+    patterns[target].resolution = pattern.resolution;
   }
 
   void copyToPrev() {
     int target = patternIdx - 1;
     if (target < 1) { target = NUM_PATTERNS; }
-    patterns[target] = pattern;
+    for (int i = 0; i < NUM_STEPS; i++) {
+      patterns[target].steps[i] = pattern.steps[i];
+    }
+    patterns[target].resolution = pattern.resolution;
   }
 
   void copyResoToAll() {
