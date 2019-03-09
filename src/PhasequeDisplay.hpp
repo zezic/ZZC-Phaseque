@@ -159,9 +159,13 @@ struct PatternDisplayWidget : BaseDisplayWidget {
       }
     }
     if (*activeStep) {
-      nvgStrokeColor(vg, lcdActiveColor);
-      nvgFillColor(vg, lcdActiveColor);
-      drawStep(vg, **activeStep);
+      Step *activeStepPtr = *activeStep;
+      if (activeStepPtr) {
+        Step activeStepCopy = *activeStepPtr;
+        nvgStrokeColor(vg, lcdActiveColor);
+        nvgFillColor(vg, lcdActiveColor);
+        drawStep(vg, activeStepCopy);
+      }
     }
     nvgResetScissor(vg);
   }
