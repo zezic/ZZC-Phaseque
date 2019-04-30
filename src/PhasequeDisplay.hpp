@@ -17,7 +17,6 @@ struct PatternDisplayWidget : BaseDisplayWidget {
   float *globalValueInput;
   float *globalValueParam;
   bool *globalGate;
-  bool *disabled;
 
   NVGcolor lcdGhostColor = nvgRGB(0x1e, 0x1f, 0x1d);
   NVGcolor lcdActiveColor = nvgRGB(0xff, 0xd4, 0x2a);
@@ -173,16 +172,6 @@ struct PatternDisplayWidget : BaseDisplayWidget {
   void draw(NVGcontext *vg) override {
     drawBackground(vg);
     if (!ready) { return; }
-    if (disabled && *disabled) {
-      nvgFontSize(vg, 12.0);
-      nvgFontFaceId(vg, font->handle);
-      nvgTextLetterSpacing(vg, 0.1);
-      nvgTextAlign(vg, NVG_ALIGN_CENTER);
-      Vec textPos1 = Vec(box.size.x * 0.1f, box.size.y * 0.45f);
-      nvgFillColor(vg, lcdActiveColor);
-      nvgTextBox(vg, textPos1.x, textPos1.y, box.size.y * 0.8f, "The alpha-testing period is over.\n To continue using this module, please, download the latest version from the VCV Rack Plugin Library.", NULL);
-      return;
-    }
 
     for (int i = 1; i < NUM_STEPS; i++) {
       drawDash(vg, Vec(padding + i * stepX, padding + dashLine1));

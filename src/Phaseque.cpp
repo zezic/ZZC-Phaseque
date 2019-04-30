@@ -207,8 +207,6 @@ struct Phaseque : Module {
     NUM_LIGHTS
   };
 
-  bool disabled = false;
-
   Pattern patterns[NUM_PATTERNS + 1]; // Because we don't want to use pattern #0
   int patternIdx = 1;
   int lastPatternIdx = 1;
@@ -602,11 +600,6 @@ struct Phaseque : Module {
   }
 
   Phaseque() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {
-    time_t now = time(0);
-    tm *ltm = localtime(&now);
-    if (ltm->tm_year != 119 || ltm->tm_mon != 2) {
-      disabled = true;
-    }
     for (int i = 0; i <= NUM_PATTERNS; i++) {
       patterns[i].init();
       patterns[i].goTo = i == NUM_PATTERNS ? 1.0f : ((float) (i + 1));
@@ -943,7 +936,6 @@ struct PhasequeXYDisplayWidget : XYDisplayWidget {
 
 
 void Phaseque::step() {
-  if (disabled) { return; }
   processGlobalParams();
   processPatternNav();
   processButtons();
@@ -1286,7 +1278,6 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) : ModuleWidget(module) {
   patternDisplay->activeStep = &module->activeStep;
   patternDisplay->direction = &module->direction;
   patternDisplay->globalGate = &module->globalGate;
-  patternDisplay->disabled = &module->disabled;
   addChild(patternDisplay);
 
   addInput(Port::create<ZZC_PJ_Port>(Vec(259, 319.75f), Port::INPUT, module, Phaseque::GLOBAL_GATE_INPUT));
