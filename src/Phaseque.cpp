@@ -313,7 +313,7 @@ struct Phaseque : Module {
     lights[GLOBAL_GATE_LED].setBrightness(globalGate);
     // Shift
     globalShift = params[GLOBAL_SHIFT_PARAM].getValue() + clamp(inputs[GLOBAL_SHIFT_INPUT].getVoltage() * 0.2f * baseStepLen, -baseStepLen, baseStepLen);
-    globalLen = params[GLOBAL_LEN_PARAM].getValue() * (clamp(inputs[GLOBAL_LEN_INPUT].getVoltage(), -5.0f, 5.0f) * 0.2f + 1.0f);
+    globalLen = params[GLOBAL_LEN_PARAM].getValue() * (clamp(inputs[GLOBAL_LEN_INPUT].getVoltage(), -5.0f, 4.999f) * 0.2f + 1.0f);
   }
 
   inline void processPatternNav() {
