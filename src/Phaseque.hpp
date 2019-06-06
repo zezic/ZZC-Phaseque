@@ -1,6 +1,5 @@
-#include "rack.hpp"
+#include "rack0.hpp"
 #include <algorithm> // for std:rotate
-#include "dsp/functions.hpp"
 
 #include "ZZC.hpp"
 
@@ -100,7 +99,7 @@ struct Mutator {
         (isNear(value, low) && this->factor < 0.0f)) {
       this->factor *= -1.0f;
     }
-    this->factor = clamp(this->factor + (randomUniform() - 0.5f) * 0.05f, -1.0f, 1.0f);
+    this->factor = clamp(this->factor + (random::uniform() - 0.5f) * 0.05f, -1.0f, 1.0f);
     return clamp(value + this->factor * range * force, low, high);
   }
 };
@@ -118,7 +117,7 @@ struct MutableValue {
   float unmutateFrom = 0.0f;
   float mutMult = 1.0f;
 
-  json_t *toJson() {
+  json_t *dataToJson() {
     json_t *mutableValueJ = json_object();
     json_object_set_new(mutableValueJ, "base", json_real(this->base));
     json_object_set_new(mutableValueJ, "mutation", json_real(this->mutation));
@@ -126,7 +125,7 @@ struct MutableValue {
     return mutableValueJ;
   }
 
-  void fromJson(json_t *mutableValueJ) {
+  void dataFromJson(json_t *mutableValueJ) {
     this->base = json_number_value(json_object_get(mutableValueJ, "base"));
     this->mutation = json_number_value(json_object_get(mutableValueJ, "mutation"));
     this->isClean = json_boolean_value(json_object_get(mutableValueJ, "isClean"));
@@ -220,7 +219,7 @@ struct MutableValue {
 
   void randomize() {
     float range = this->maxValue - this->minValue;
-    this->base = this->minValue + randomUniform() * range;
+    this->base = this->minValue + random::uniform() * range;
     this->clampMutation();
     this->applyMutation();
     this->isClean = false;
@@ -251,32 +250,32 @@ struct Step {
   float *patternShift = nullptr;
   float *globalShift = nullptr;
   float *globalLen = nullptr;
-  float *exprCurveInput = nullptr;
-  float *exprPowerInput = nullptr;
+  rack::engine::Port *exprCurvePort = nullptr;
+  rack::engine::Port *exprPowerPort = nullptr;
 
   Mutator mutator;
 
-  json_t* toJson() {
+  json_t* dataToJson() {
     json_t *stepJ = json_object();
     json_object_set_new(stepJ, "idx", json_integer(idx));
     json_object_set_new(stepJ, "in_", json_real(in_));
     json_object_set_new(stepJ, "gate", json_boolean(gate));
     json_t *attrsJ = json_array();
     for (int i = 0; i < STEP_ATTRS_TOTAL; i++) {
-      json_array_append(attrsJ, this->attrs[i].toJson());
+      json_array_append(attrsJ, this->attrs[i].dataToJson());
     }
     json_object_set_new(stepJ, "attrs", attrsJ);
     return stepJ;
   }
 
-  void fromJson(json_t *stepJ) {
+  void dataFromJson(json_t *stepJ) {
     idx = json_integer_value(json_object_get(stepJ, "idx"));
     in_ = json_number_value(json_object_get(stepJ, "in_"));
     gate = json_boolean_value(json_object_get(stepJ, "gate"));
     json_t *attrsJ = json_object_get(stepJ, "attrs");
     for (int i = 0; i < STEP_ATTRS_TOTAL; i++) {
       json_t *attrJ = json_array_get(attrsJ, i);
-      attrs[i].fromJson(attrJ);
+      attrs[i].dataFromJson(attrJ);
     }
     this->updateCleanFlag();
   }
@@ -307,7 +306,7 @@ struct Step {
     return fmaxf(minStepLen, this->attrs[STEP_LEN].value * (globalLen ? *globalLen : 1.0));
   }
   void randomize() {
-    this->gate = randomUniform() > 0.2f; // Because it's too boring when there is only few notes
+    this->gate = random::uniform() > 0.2f; // Because it's too boring when there is only few notes
     for (int i = 0; i < STEP_ATTRS_TOTAL; i++) {
       this->attrs[i].randomize();
     }
@@ -315,8 +314,8 @@ struct Step {
   }
   float expr(float phase) {
     return curve(phase,
-      clamp(this->attrs[STEP_EXPR_CURVE].value + (exprCurveInput ? *exprCurveInput * 0.2f : 0.0f), -1.0f, 1.0f),
-      clamp(this->attrs[STEP_EXPR_POWER].value + (exprPowerInput ? *exprPowerInput * 0.2f : 0.0f), -1.0f, 1.0f),
+      clamp(this->attrs[STEP_EXPR_CURVE].value + (exprCurvePort ? exprCurvePort->getVoltage() * 0.2f : 0.0f), -1.0f, 1.0f),
+      clamp(this->attrs[STEP_EXPR_POWER].value + (exprPowerPort ? exprPowerPort->getVoltage() * 0.2f : 0.0f), -1.0f, 1.0f),
       this->attrs[STEP_EXPR_IN].value,
       this->attrs[STEP_EXPR_OUT].value
     );
@@ -385,27 +384,27 @@ struct Pattern {
   float shift;
   Step steps[NUM_STEPS];
 
-  json_t *toJson() {
+  json_t *dataToJson() {
     json_t *patternJ = json_object();
     json_object_set_new(patternJ, "resolution", json_real(resolution));
     json_object_set_new(patternJ, "goTo", json_real(goTo));
     json_object_set_new(patternJ, "shift", json_real(shift));
     json_t *stepsJ = json_array();
     for (int i = 0; i < NUM_STEPS; i++) {
-      json_array_append(stepsJ, steps[i].toJson());
+      json_array_append(stepsJ, steps[i].dataToJson());
     }
     json_object_set_new(patternJ, "steps", stepsJ);
     return patternJ;
   }
 
-  void fromJson(json_t *patternJ) {
+  void dataFromJson(json_t *patternJ) {
     resolution = json_number_value(json_object_get(patternJ, "resolution"));
     goTo = json_number_value(json_object_get(patternJ, "goTo"));
     shift = json_number_value(json_object_get(patternJ, "shift"));
     json_t *stepsJ = json_object_get(patternJ, "steps");
     for (int i = 0; i < NUM_STEPS; i++) {
       json_t *stepJ = json_array_get(stepsJ, i);
-      steps[i].fromJson(stepJ);
+      steps[i].dataFromJson(stepJ);
     }
   }
 
@@ -442,13 +441,13 @@ struct Pattern {
     }
   }
   void refreshPointers(float *globalShiftPtr, float *globalLenPtr,
-                       float *exprCurveInputPtr, float *exprPowerInputPtr) {
+                       rack::engine::Port *exprCurveInputPtr, rack::engine::Port *exprPowerInputPtr) {
     for (int i = 0; i < NUM_STEPS; i++) {
       this->steps[i].patternShift = &shift;
       if (globalShiftPtr) { this->steps[i].globalShift = globalShiftPtr; }
       if (globalLenPtr) { this->steps[i].globalLen = globalLenPtr; }
-      if (exprCurveInputPtr) { this->steps[i].exprCurveInput = exprCurveInputPtr; }
-      if (exprPowerInputPtr) { this->steps[i].exprPowerInput = exprPowerInputPtr; }
+      if (exprCurveInputPtr) { this->steps[i].exprCurvePort = exprCurveInputPtr; }
+      if (exprPowerInputPtr) { this->steps[i].exprPowerPort = exprPowerInputPtr; }
     }
   }
 
@@ -459,7 +458,7 @@ struct Pattern {
   }
 
   void randomizeReso() {
-    this->resolution = roundf(1.0 + randomUniform() * 98);
+    this->resolution = roundf(1.0 + random::uniform() * 98);
   }
 
   Step* getStepForPhase(float phase, bool globalGate) {
@@ -490,14 +489,14 @@ struct Pattern {
     std::rotate(&this->steps[0], &this->steps[1], &this->steps[NUM_STEPS]);
     for (int i = 0; i < NUM_STEPS; i++) {
       this->steps[i].in_ = fastmod(this->steps[i].in_ - baseStepLen, 1.0);
-      this->steps[i].idx = eucmod(this->steps[i].idx - 1, NUM_STEPS);
+      this->steps[i].idx = eucMod(this->steps[i].idx - 1, NUM_STEPS);
     }
   }
   void shiftRight() {
     std::rotate(&this->steps[0], &this->steps[NUM_STEPS - 1], &this->steps[NUM_STEPS]);
     for (int i = 0; i < NUM_STEPS; i++) {
       this->steps[i].in_ = fastmod(this->steps[i].in_ + baseStepLen, 1.0);
-      this->steps[i].idx = eucmod(this->steps[i].idx + 1, NUM_STEPS);
+      this->steps[i].idx = eucMod(this->steps[i].idx + 1, NUM_STEPS);
     }
   }
   void resetLenghts() {
