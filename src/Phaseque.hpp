@@ -8,9 +8,20 @@
 
 using namespace rack;
 
+inline float fastPow(float base, float exp) {
+  float lowExp = std::floor(exp - 1.0f);
+  float low = base;
+  for (float i = 0.0f; i < lowExp; i = i + 1.0f) {
+    low = low * base;
+  }
+  float high = low * base;
+  float balance = exp - lowExp;
+  return crossfade(low, high, balance);
+}
+
 inline float fastmod(float value, float base) {
-  if (value >= 0.0 && value < base) { return value; }
-  if (value < 0.0) {
+  if (value >= 0.0f && value < base) { return value; }
+  if (value < 0.0f) {
     return value + base;
   }
   return value - base;
@@ -21,12 +32,15 @@ float curve(float phase, float curvature, float power, float in, float out) {
   if (curvature == 0.0f) {
     return in + range * phase;
   }
-  float absCurvature = fabsf(curvature);
+  float absCurvature = std::abs(curvature);
   bool invCurve = in > out;
   bool invSpline = (curvature > 0.0f) ^ invCurve;
   power = 5.0f + power * (invSpline ? -3.0f : 3.0f);
-  float spline = invSpline ? (1.0f - powf(1.0f - phase, power)) : powf(phase, power);
-  float deformed = (phase * (1.0f - absCurvature)) + spline * absCurvature;
+  // float spline = invSpline ? (1.0f - std::pow(1.0f - phase, power)) : std::pow(phase, power);
+  float spline = invSpline ? (1.0f - fastPow(1.0f - phase, power)) : fastPow(phase, power);
+  // float deformed = (phase * (1.0f - absCurvature)) + spline * absCurvature;
+  // float deformed = phase + (spline - phase) * absCurvature;
+  float deformed = crossfade(phase, spline, absCurvature);
   return in + deformed * range;
 }
 
@@ -283,8 +297,14 @@ struct Step {
   float out() {
     return in() + minLen();
   }
+  float fastOut(float inCache, float globalLen) {
+    return inCache + this->attrs[STEP_LEN].value * globalLen;
+  }
   float in() {
-    return in_ + attrs[STEP_SHIFT].value + (patternShift ? *patternShift : 0.0) + (globalShift ? *globalShift : 0.0);
+    return in_ + attrs[STEP_SHIFT].value + (patternShift ? *patternShift : 0.0f) + (globalShift ? *globalShift : 0.0f);
+  }
+  float fastIn(float shift) {
+    return in_ + attrs[STEP_SHIFT].value + shift;
   }
   void init(int i) {
     this->idx = i;
@@ -303,7 +323,7 @@ struct Step {
     this->isClean = true;
   }
   float minLen() {
-    return fmaxf(minStepLen, this->attrs[STEP_LEN].value * (globalLen ? *globalLen : 1.0));
+    return std::max(minStepLen, this->attrs[STEP_LEN].value * (globalLen ? *globalLen : 1.0f));
   }
   void randomize() {
     this->gate = random::uniform() > 0.2f; // Because it's too boring when there is only few notes
@@ -379,10 +399,12 @@ struct Step {
 };
 
 struct Pattern {
-  float resolution;
+  float resolution = 8.0f;
   float goTo = 1.0f;
-  float shift;
+  float shift = 0.0f;
   Step steps[NUM_STEPS];
+  float *globalShiftPtr = nullptr;
+  float *globalLenPtr = nullptr;
 
   json_t *dataToJson() {
     json_t *patternJ = json_object();
@@ -409,7 +431,7 @@ struct Pattern {
   }
 
   bool isClean() {
-    if (resolution != 8.0 || goTo != 1.0 || shift != 0.0) {
+    if (resolution != 8.0f || goTo != 1.0f || shift != 0.0f) {
       return false;
     }
     for (int i = 0; i < NUM_STEPS; i++) {
@@ -434,14 +456,16 @@ struct Pattern {
     refreshPointers(nullptr, nullptr, nullptr, nullptr);
   }
   void init() {
-    resolution = 8.0;
-    shift = 0.0;
+    resolution = 8.0f;
+    shift = 0.0f;
     for (int i = 0; i < NUM_STEPS; i++) {
       this->steps[i].init(i);
     }
   }
   void refreshPointers(float *globalShiftPtr, float *globalLenPtr,
                        rack::engine::Port *exprCurveInputPtr, rack::engine::Port *exprPowerInputPtr) {
+    this->globalShiftPtr = globalShiftPtr;
+    this->globalLenPtr = globalLenPtr;
     for (int i = 0; i < NUM_STEPS; i++) {
       this->steps[i].patternShift = &shift;
       if (globalShiftPtr) { this->steps[i].globalShift = globalShiftPtr; }
@@ -458,24 +482,60 @@ struct Pattern {
   }
 
   void randomizeReso() {
-    this->resolution = roundf(1.0 + random::uniform() * 98);
+    this->resolution = roundf(1.0f + random::uniform() * 98.0f);
   }
+
+  // // Slow implementation
+  // Step* getStepForPhase(float phase, bool globalGate) {
+  //   Step* step = nullptr;
+  //   float bestDist = 10.0f;
+  //   for (int i = 0; i < NUM_STEPS; i++) {
+  //     Step* curStep = &steps[i];
+  //     if (!curStep->gate ^ !globalGate) { continue; }
+  //     float eucIn = fastmod(curStep->in(), 1.0f);
+  //     float eucOut = fastmod(curStep->out(), 1.0f);
+  //     if (((eucIn < eucOut) ^ !((phase >= eucIn) ^ (phase < eucOut)))) { continue; }
+  //     float delta = phase - 0.5f;
+  //     float in = fastmod(eucIn - delta, 1.0f);
+  //     float dist = fabsf(0.5f - in);
+  //     if (dist > bestDist) { continue; }
+  //     step = curStep;
+  //     bestDist = dist;
+  //   }
+  //   return step;
+  // }
 
   Step* getStepForPhase(float phase, bool globalGate) {
     Step* step = nullptr;
-    float bestDist = 10.0f;
+    float localShift = shift + *globalShiftPtr;
+    float localLen = *globalLenPtr;
+    float prePhase = phase - 1.0f;
+    float postPhase = phase + 1.0f;
+    float bestRating = 10.0f;
+
     for (int i = 0; i < NUM_STEPS; i++) {
-      if (!steps[i].gate ^ !globalGate) { continue; }
-      float eucIn = fastmod(steps[i].in(), 1.0f); // 0.9
-      float eucOut = fastmod(steps[i].out(), 1.0f); // 0.0
-      if (((eucIn < eucOut) ^ !((phase >= eucIn) ^ (phase < eucOut)))) { continue; }
-      float delta = phase - 0.5f;
-      float in = fastmod(eucIn - delta, 1.0f);
-      float dist = fabsf(0.5f - in);
-      if (dist > bestDist) { continue; }
-      step = &steps[i];
-      bestDist = dist;
+      Step* curStep = &steps[i];
+      if (!curStep->gate ^ !globalGate) { continue; }
+      float stepIn = curStep->in_ + curStep->attrs[STEP_SHIFT].value + localShift;
+      float stepOut = stepIn + curStep->attrs[STEP_LEN].value * localLen;
+      float rating = 10.0f;
+
+      if (stepIn <= phase && phase < stepOut) {
+        rating = phase - stepIn;
+      } else if (stepIn <= prePhase && prePhase < stepOut) {
+        rating = prePhase - stepIn;
+      } else if (stepIn <= postPhase && postPhase < stepOut) {
+        rating = postPhase - stepIn;
+      } else {
+        continue;
+      }
+
+      if (rating < bestRating) {
+        bestRating = rating;
+        step = curStep;
+      }
     }
+
     return step;
   }
 
@@ -488,14 +548,14 @@ struct Pattern {
   void shiftLeft() {
     std::rotate(&this->steps[0], &this->steps[1], &this->steps[NUM_STEPS]);
     for (int i = 0; i < NUM_STEPS; i++) {
-      this->steps[i].in_ = fastmod(this->steps[i].in_ - baseStepLen, 1.0);
+      this->steps[i].in_ = fastmod(this->steps[i].in_ - baseStepLen, 1.0f);
       this->steps[i].idx = eucMod(this->steps[i].idx - 1, NUM_STEPS);
     }
   }
   void shiftRight() {
     std::rotate(&this->steps[0], &this->steps[NUM_STEPS - 1], &this->steps[NUM_STEPS]);
     for (int i = 0; i < NUM_STEPS; i++) {
-      this->steps[i].in_ = fastmod(this->steps[i].in_ + baseStepLen, 1.0);
+      this->steps[i].in_ = fastmod(this->steps[i].in_ + baseStepLen, 1.0f);
       this->steps[i].idx = eucMod(this->steps[i].idx + 1, NUM_STEPS);
     }
   }

@@ -1124,7 +1124,7 @@ void Phaseque::process(const ProcessArgs &args) {
 
   outputs[PTRN_START_OUTPUT].setVoltage(ptrnStartPulseGenerator.process(args.sampleTime) ? 10.0f : 0.0f);
   outputs[PTRN_END_OUTPUT].setVoltage(ptrnEndPulseGenerator.process(args.sampleTime) ? 10.0f : 0.0f);
-  outputs[PTRN_WRAP_OUTPUT].setVoltage(fmaxf(outputs[PTRN_START_OUTPUT].value, outputs[PTRN_END_OUTPUT].value));
+  outputs[PTRN_WRAP_OUTPUT].setVoltage(std::max(outputs[PTRN_START_OUTPUT].value, outputs[PTRN_END_OUTPUT].value));
   outputs[PTRN_OUTPUT].setVoltage(patternToVolts(patternIdx));
   if (patternIdx != lastPatternIdx) {
     wentPulseGenerator.trigger(1e-3f);
@@ -1160,16 +1160,16 @@ void Phaseque::process(const ProcessArgs &args) {
     outputs[EXPR_CURVE_OUTPUT].setVoltage(curve * 5.0f);
     outputs[PHASE_OUTPUT].setVoltage(stepPhase * 10.0f);
 
-    lights[V_POS_LIGHT].setBrightness(fmaxf(v * 0.5f, 0.0f));
-    lights[V_NEG_LIGHT].setBrightness(fmaxf(v * -0.5f, 0.0f));
-    lights[SHIFT_POS_LIGHT].setBrightness(fmaxf(shift, 0.0f));
-    lights[SHIFT_NEG_LIGHT].setBrightness(fmaxf(-shift, 0.0f));
-    lights[LEN_POS_LIGHT].setBrightness(fmaxf(len, 0.0f));
-    lights[LEN_NEG_LIGHT].setBrightness(fmaxf(-len, 0.0f));
-    lights[EXPR_POS_LIGHT].setBrightness(fmaxf(expr, 0.0f));
-    lights[EXPR_NEG_LIGHT].setBrightness(fmaxf(-expr, 0.0f));
-    lights[EXPR_CURVE_POS_LIGHT].setBrightness(fmaxf(curve, 0.0f));
-    lights[EXPR_CURVE_NEG_LIGHT].setBrightness(fmaxf(-curve, 0.0f));
+    lights[V_POS_LIGHT].setBrightness(std::max(v * 0.5f, 0.0f));
+    lights[V_NEG_LIGHT].setBrightness(std::max(v * -0.5f, 0.0f));
+    lights[SHIFT_POS_LIGHT].setBrightness(std::max(shift, 0.0f));
+    lights[SHIFT_NEG_LIGHT].setBrightness(std::max(-shift, 0.0f));
+    lights[LEN_POS_LIGHT].setBrightness(std::max(len, 0.0f));
+    lights[LEN_NEG_LIGHT].setBrightness(std::max(-len, 0.0f));
+    lights[EXPR_POS_LIGHT].setBrightness(std::max(expr, 0.0f));
+    lights[EXPR_NEG_LIGHT].setBrightness(std::max(-expr, 0.0f));
+    lights[EXPR_CURVE_POS_LIGHT].setBrightness(std::max(curve, 0.0f));
+    lights[EXPR_CURVE_NEG_LIGHT].setBrightness(std::max(-curve, 0.0f));
     lights[PHASE_LIGHT].setBrightness(stepPhase);
 
     for (int i = 0; i < NUM_STEPS; i++) {
