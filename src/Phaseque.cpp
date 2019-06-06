@@ -309,11 +309,26 @@ struct Phaseque : Module {
     if (globalGateButtonTrigger.process(params[GLOBAL_GATE_SWITCH_PARAM].getValue())) {
       globalGateInternal ^= true;
     }
-    globalGate = globalGateInternal ^ (inputs[GLOBAL_GATE_INPUT].getVoltage() > 1.0f);
+    if (inputs[GLOBAL_GATE_INPUT].isConnected()) {
+      globalGate = globalGateInternal ^ (inputs[GLOBAL_GATE_INPUT].getVoltage() > 1.0f);
+    } else {
+      globalGate = globalGateInternal;
+    }
     lights[GLOBAL_GATE_LED].setBrightness(globalGate);
+
     // Shift
-    globalShift = params[GLOBAL_SHIFT_PARAM].getValue() + clamp(inputs[GLOBAL_SHIFT_INPUT].getVoltage() * 0.2f * baseStepLen, -baseStepLen, baseStepLen);
-    globalLen = params[GLOBAL_LEN_PARAM].getValue() * (clamp(inputs[GLOBAL_LEN_INPUT].getVoltage(), -5.0f, 4.999f) * 0.2f + 1.0f);
+    if (inputs[GLOBAL_SHIFT_INPUT].isConnected()) {
+      globalShift = params[GLOBAL_SHIFT_PARAM].getValue() + clamp(inputs[GLOBAL_SHIFT_INPUT].getVoltage() * 0.2f * baseStepLen, -baseStepLen, baseStepLen); 
+    } else {
+      globalShift = params[GLOBAL_SHIFT_PARAM].getValue(); 
+    }
+
+    // Length
+    if (inputs[GLOBAL_LEN_INPUT].isConnected()) {
+      globalLen = params[GLOBAL_LEN_PARAM].getValue() * (clamp(inputs[GLOBAL_LEN_INPUT].getVoltage(), -5.0f, 4.999f) * 0.2f + 1.0f);
+    } else {
+      globalLen = params[GLOBAL_LEN_PARAM].getValue();
+    }
   }
 
   inline void processPatternNav() {

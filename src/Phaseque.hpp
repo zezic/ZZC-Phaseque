@@ -8,7 +8,7 @@
 
 using namespace rack;
 
-inline float fastPow(float base, float exp) {
+inline float crossfadePow(float base, float exp) {
   float lowExp = std::floor(exp - 1.0f);
   float low = base;
   for (float i = 0.0f; i < lowExp; i = i + 1.0f) {
@@ -37,7 +37,7 @@ float curve(float phase, float curvature, float power, float in, float out) {
   bool invSpline = (curvature > 0.0f) ^ invCurve;
   power = 5.0f + power * (invSpline ? -3.0f : 3.0f);
   // float spline = invSpline ? (1.0f - std::pow(1.0f - phase, power)) : std::pow(phase, power);
-  float spline = invSpline ? (1.0f - fastPow(1.0f - phase, power)) : fastPow(phase, power);
+  float spline = invSpline ? (1.0f - crossfadePow(1.0f - phase, power)) : crossfadePow(phase, power);
   // float deformed = (phase * (1.0f - absCurvature)) + spline * absCurvature;
   // float deformed = phase + (spline - phase) * absCurvature;
   float deformed = crossfade(phase, spline, absCurvature);
@@ -332,7 +332,7 @@ struct Step {
     }
     this->isClean = false;
   }
-  float expr(float phase) {
+  inline float expr(float phase) {
     return curve(phase,
       clamp(this->attrs[STEP_EXPR_CURVE].value + (exprCurvePort ? exprCurvePort->getVoltage() * 0.2f : 0.0f), -1.0f, 1.0f),
       clamp(this->attrs[STEP_EXPR_POWER].value + (exprPowerPort ? exprPowerPort->getVoltage() * 0.2f : 0.0f), -1.0f, 1.0f),
