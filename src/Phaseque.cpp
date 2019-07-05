@@ -287,6 +287,9 @@ struct Phaseque : Module {
   float resolution = pattern.resolution;
   int lastGoToRequest = 0;
 
+  bool polyphonic = false;
+  bool stepsStates[NUM_STEPS] = { false };
+
   void goToPattern(int targetIdx) {
     if (targetIdx < 1) { targetIdx = NUM_PATTERNS; }
     if (targetIdx > NUM_PATTERNS) { targetIdx = 1; }
@@ -603,6 +606,30 @@ struct Phaseque : Module {
     }
   }
 
+  void renderStep(
+    Step *step, int channel,
+    Output &vOutput,
+    Output &shiftOutput,
+    Output &lenOutput,
+    Output &exprOutput,
+    Output &exprCurveOutput,
+    Output &phaseOutput
+  ) {
+    float v = step->attrs[STEP_VALUE].value;
+    float shift = step->attrs[STEP_SHIFT].value / baseStepLen;
+    float len = step->attrs[STEP_LEN].value / baseStepLen - 1.0f;
+    float stepPhase = step->phase(phaseShifted);
+    float expr = step->expr(stepPhase);
+    float curve = step->attrs[STEP_EXPR_CURVE].value;
+
+    outputs[V_OUTPUT].setVoltage(v, channel);
+    outputs[SHIFT_OUTPUT].setVoltage(shift * 5.0f, channel);
+    outputs[LEN_OUTPUT].setVoltage(len * 5.0f, channel);
+    outputs[EXPR_OUTPUT].setVoltage(expr * 5.0f, channel);
+    outputs[EXPR_CURVE_OUTPUT].setVoltage(curve * 5.0f, channel);
+    outputs[PHASE_OUTPUT].setVoltage(stepPhase * 10.0f, channel);
+  }
+
   Phaseque() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
     configParam(TEMPO_TRACK_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
@@ -736,6 +763,7 @@ struct Phaseque : Module {
     }
     patternIdx = 1;
     takeOutCurrentPattern();
+    polyphonic = false;
   }
 
   json_t *dataToJson() override {
@@ -747,6 +775,7 @@ struct Phaseque : Module {
     json_object_set_new(rootJ, "globalGateInternal", json_boolean(globalGateInternal));
     json_object_set_new(rootJ, "patternIdx", json_integer(patternIdx));
     json_object_set_new(rootJ, "wait", json_boolean(wait));
+    json_object_set_new(rootJ, "polyphonic", json_boolean(polyphonic));
 
     json_t *patternsJ = json_array();
     for (int i = 0; i <= NUM_PATTERNS; i++) {
@@ -768,6 +797,7 @@ struct Phaseque : Module {
     json_t *globalGateInternalJ = json_object_get(rootJ, "globalGateInternal");
     json_t *patternIdxJ = json_object_get(rootJ, "patternIdx");
     json_t *waitJ = json_object_get(rootJ, "wait");
+    json_t *polyphonicJ = json_object_get(rootJ, "polyphonic");
     if (tempoTrackJ) {
       tempoTrack = json_boolean_value(tempoTrackJ);
     }
@@ -788,6 +818,9 @@ struct Phaseque : Module {
     }
     if (waitJ) {
       wait = json_boolean_value(waitJ);
+    }
+    if (polyphonicJ) {
+      polyphonic = json_boolean_value(polyphonicJ);
     }
 
     json_t *patternsJ = json_object_get(rootJ, "patterns");
@@ -1131,7 +1164,15 @@ void Phaseque::process(const ProcessArgs &args) {
     ptrnStartPulseGenerator.trigger(1e-3f);
   }
 
-  activeStep = pattern.getStepForPhase(phaseShifted, globalGate);
+  if (polyphonic) {
+    activeStep = nullptr;
+    pattern.updateStepsStates(phaseShifted, globalGate, stepsStates);
+  } else {
+    activeStep = pattern.getStepForPhase(phaseShifted, globalGate);
+    for (int i = 0; i < NUM_STEPS; i++) {
+      stepsStates[i] = false;
+    }
+  }
   if ((activeStep && lastActiveStep) && activeStep != lastActiveStep) {
     retrigGapGenerator.trigger(1e-4f);
   }
@@ -1152,51 +1193,75 @@ void Phaseque::process(const ProcessArgs &args) {
   }
 
   retrigGap = retrigGapGenerator.process(args.sampleTime);
-  if (retrigGap || !clutch) {
-    outputs[GATE_OUTPUT].setVoltage(0.0f);
-    lights[GATE_LIGHT].setBrightness(0.0f);
-  } else {
-    outputs[GATE_OUTPUT].setVoltage(activeStep ? 10.0f : 0.0f);
-    lights[GATE_LIGHT].setBrightness(activeStep ? 1.0f : 0.0f);
-  }
-
-  if (activeStep) {
-    float v = activeStep->attrs[STEP_VALUE].value;
-    float shift = activeStep->attrs[STEP_SHIFT].value / baseStepLen;
-    float len = activeStep->attrs[STEP_LEN].value / baseStepLen - 1.0f;
-    float stepPhase = activeStep->phase(phaseShifted);
-    float expr = activeStep->expr(stepPhase);
-    float curve = activeStep->attrs[STEP_EXPR_CURVE].value;
-
-    outputs[V_OUTPUT].setVoltage(v);
-    outputs[SHIFT_OUTPUT].setVoltage(shift * 5.0f);
-    outputs[LEN_OUTPUT].setVoltage(len * 5.0f);
-    outputs[EXPR_OUTPUT].setVoltage(expr * 5.0f);
-    outputs[EXPR_CURVE_OUTPUT].setVoltage(curve * 5.0f);
-    outputs[PHASE_OUTPUT].setVoltage(stepPhase * 10.0f);
-
-    lights[V_POS_LIGHT].setBrightness(std::max(v * 0.5f, 0.0f));
-    lights[V_NEG_LIGHT].setBrightness(std::max(v * -0.5f, 0.0f));
-    lights[SHIFT_POS_LIGHT].setBrightness(std::max(shift, 0.0f));
-    lights[SHIFT_NEG_LIGHT].setBrightness(std::max(-shift, 0.0f));
-    lights[LEN_POS_LIGHT].setBrightness(std::max(len, 0.0f));
-    lights[LEN_NEG_LIGHT].setBrightness(std::max(-len, 0.0f));
-    lights[EXPR_POS_LIGHT].setBrightness(std::max(expr, 0.0f));
-    lights[EXPR_NEG_LIGHT].setBrightness(std::max(-expr, 0.0f));
-    lights[EXPR_CURVE_POS_LIGHT].setBrightness(std::max(curve, 0.0f));
-    lights[EXPR_CURVE_NEG_LIGHT].setBrightness(std::max(-curve, 0.0f));
-    lights[PHASE_LIGHT].setBrightness(stepPhase);
-
-    for (int i = 0; i < NUM_STEPS; i++) {
-      outputs[STEP_GATE_OUTPUT + i].setVoltage(activeStep->idx == i ? 10.0f : 0.0f);
-      lights[STEP_GATE_LIGHT + i].setBrightness(activeStep->idx == i ? 1.0f : 0.0f);
-    }
-  } else {
-    for (int i = 0; i < NUM_STEPS; i++) {
-      outputs[STEP_GATE_OUTPUT + i].setVoltage(0.0f);
-      lights[STEP_GATE_LIGHT + i].setBrightness(0.0f);
+  if (!polyphonic) {
+    if (retrigGap || !clutch) {
+      outputs[GATE_OUTPUT].setVoltage(0.0f);
+      lights[GATE_LIGHT].setBrightness(0.0f);
+    } else {
+      outputs[GATE_OUTPUT].setVoltage(activeStep ? 10.0f : 0.0f);
+      lights[GATE_LIGHT].setBrightness(activeStep ? 1.0f : 0.0f);
     }
   }
+  if (polyphonic) {
+    for (int i = 0; i < NUM_STEPS; i++) {
+      if (stepsStates[i]) {
+        renderStep(
+          &pattern.steps[i], i,
+          outputs[V_OUTPUT],
+          outputs[SHIFT_OUTPUT],
+          outputs[LEN_OUTPUT],
+          outputs[EXPR_OUTPUT],
+          outputs[EXPR_CURVE_OUTPUT],
+          outputs[PHASE_OUTPUT]
+        );
+        outputs[GATE_OUTPUT].setVoltage(10.f, i);
+      } else {
+        outputs[GATE_OUTPUT].setVoltage(0.f, i);
+      }
+    }
+    outputs[GATE_OUTPUT].setChannels(NUM_STEPS);
+    outputs[V_OUTPUT].setChannels(NUM_STEPS);
+    outputs[SHIFT_OUTPUT].setChannels(NUM_STEPS);
+    outputs[LEN_OUTPUT].setChannels(NUM_STEPS);
+    outputs[EXPR_OUTPUT].setChannels(NUM_STEPS);
+    outputs[EXPR_CURVE_OUTPUT].setChannels(NUM_STEPS);
+    outputs[PHASE_OUTPUT].setChannels(NUM_STEPS);
+  } else {
+    if (activeStep) {
+      renderStep(
+        activeStep, 0,
+        outputs[V_OUTPUT],
+        outputs[SHIFT_OUTPUT],
+        outputs[LEN_OUTPUT],
+        outputs[EXPR_OUTPUT],
+        outputs[EXPR_CURVE_OUTPUT],
+        outputs[PHASE_OUTPUT]
+      );
+
+      // lights[V_POS_LIGHT].setBrightness(std::max(v * 0.5f, 0.0f));
+      // lights[V_NEG_LIGHT].setBrightness(std::max(v * -0.5f, 0.0f));
+      // lights[SHIFT_POS_LIGHT].setBrightness(std::max(shift, 0.0f));
+      // lights[SHIFT_NEG_LIGHT].setBrightness(std::max(-shift, 0.0f));
+      // lights[LEN_POS_LIGHT].setBrightness(std::max(len, 0.0f));
+      // lights[LEN_NEG_LIGHT].setBrightness(std::max(-len, 0.0f));
+      // lights[EXPR_POS_LIGHT].setBrightness(std::max(expr, 0.0f));
+      // lights[EXPR_NEG_LIGHT].setBrightness(std::max(-expr, 0.0f));
+      // lights[EXPR_CURVE_POS_LIGHT].setBrightness(std::max(curve, 0.0f));
+      // lights[EXPR_CURVE_NEG_LIGHT].setBrightness(std::max(-curve, 0.0f));
+      // lights[PHASE_LIGHT].setBrightness(stepPhase);
+
+      for (int i = 0; i < NUM_STEPS; i++) {
+        outputs[STEP_GATE_OUTPUT + i].setVoltage(activeStep->idx == i ? 10.0f : 0.0f);
+        lights[STEP_GATE_LIGHT + i].setBrightness(activeStep->idx == i ? 1.0f : 0.0f);
+      }
+    } else {
+      for (int i = 0; i < NUM_STEPS; i++) {
+        outputs[STEP_GATE_OUTPUT + i].setVoltage(0.0f);
+        lights[STEP_GATE_LIGHT + i].setBrightness(0.0f);
+      }
+    }
+  }
+
   outputs[PTRN_PHASE_OUTPUT].setVoltage(phaseShifted * 10.0f);
 
   for (int i = 0; i < NUM_STEPS; i++) {
@@ -1523,6 +1588,16 @@ struct PhasequeClearPatternItem : MenuItem {
   }
 };
 
+struct PhasequePolyphonicItem : MenuItem {
+  Phaseque *phaseq;
+  void onAction(const event::Action &e) override {
+    phaseq->polyphonic ^= true;
+  }
+  void step() override {
+    rightText = CHECKMARK(phaseq->polyphonic);
+  }
+};
+
 void PhasequeWidget::appendContextMenu(Menu *menu) {
   menu->addChild(new MenuSeparator());
 
@@ -1536,6 +1611,7 @@ void PhasequeWidget::appendContextMenu(Menu *menu) {
   PhasequeRndAllResoItem *phaseqRndAllResoItem = createMenuItem<PhasequeRndAllResoItem>("Randomize All Resolutions");
   PhasequeBakeMutationItem *phaseqBakeMutationItem = createMenuItem<PhasequeBakeMutationItem>("Bake Mutation");
   PhasequeClearPatternItem *phaseqClearPatternItem = createMenuItem<PhasequeClearPatternItem>("Clear Pattern");
+  PhasequePolyphonicItem *phaseqPolyphonicItem = createMenuItem<PhasequePolyphonicItem>("Polyphonic");
   phaseqCopyToNextItem->phaseq = phaseq;
   phaseqCopyToPrevItem->phaseq = phaseq;
   phaseqCopyResoItem->phaseq = phaseq;
@@ -1543,6 +1619,7 @@ void PhasequeWidget::appendContextMenu(Menu *menu) {
   phaseqRndAllResoItem->phaseq = phaseq;
   phaseqBakeMutationItem->phaseq = phaseq;
   phaseqClearPatternItem->phaseq = phaseq;
+  phaseqPolyphonicItem->phaseq = phaseq;
   menu->addChild(phaseqCopyToNextItem);
   menu->addChild(phaseqCopyToPrevItem);
   menu->addChild(new MenuSeparator());
@@ -1554,6 +1631,8 @@ void PhasequeWidget::appendContextMenu(Menu *menu) {
   menu->addChild(phaseqBakeMutationItem);
   menu->addChild(new MenuSeparator());
   menu->addChild(phaseqClearPatternItem);
+  menu->addChild(new MenuSeparator());
+  menu->addChild(phaseqPolyphonicItem);
 }
 
 Model *modelPhaseque = createModel<Phaseque, PhasequeWidget>("Phaseque");

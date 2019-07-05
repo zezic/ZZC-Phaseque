@@ -539,6 +539,33 @@ struct Pattern {
     return step;
   }
 
+  void updateStepsStates(float phase, bool globalGate, bool *states) {
+    float localShift = shift + *globalShiftPtr;
+    float localLen = *globalLenPtr;
+    float prePhase = phase - 1.0f;
+    float postPhase = phase + 1.0f;
+
+    for (int i = 0; i < NUM_STEPS; i++) {
+      Step* curStep = &steps[i];
+      if (!curStep->gate ^ !globalGate) {
+        states[i] = false;
+        continue;
+      }
+      float stepIn = curStep->in_ + curStep->attrs[STEP_SHIFT].value + localShift;
+      float stepOut = stepIn + curStep->attrs[STEP_LEN].value * localLen;
+
+      if (stepIn <= phase && phase < stepOut) {
+        states[i] = true;
+      } else if (stepIn <= prePhase && prePhase < stepOut) {
+        states[i] = true;
+      } else if (stepIn <= postPhase && postPhase < stepOut) {
+        states[i] = true;
+      } else {
+        states[i] = false;
+      }
+    }
+  }
+
   void quantize() {
     for (int i = 0; i < NUM_STEPS; i++) {
       this->steps[i].quantize();
