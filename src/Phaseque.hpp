@@ -202,6 +202,12 @@ struct MutableValue {
     }
   }
 
+  void scaleMutation(float factor) {
+    this->mutation *= factor;
+    this->clampMutation();
+    this->applyMutation();
+  }
+
   void adjValue(float factor) {
     if ((factor > 0.0f && this->base == this->maxValue) ||
         (factor < 0.0f && this->base == this->minValue)) {
@@ -364,6 +370,12 @@ struct Step {
       this->updateCleanFlag();
     }
   }
+  void scaleMutation(float factor) {
+    for (int i = 0; i < STEP_ATTRS_TOTAL; i++) {
+      this->attrs[i].scaleMutation(factor);
+    }
+    this->updateCleanFlag();
+  }
   void resetMutation() {
     for (int i = 0; i < STEP_ATTRS_TOTAL; i++) {
       this->attrs[i].resetMutation();
@@ -376,6 +388,10 @@ struct Step {
   void setAttr(int attr, float factor) {
     this->attrs[attr].adjValue(factor);
     this->isClean = false;
+  }
+  void setAttrAbs(int attr, float target) {
+    this->attrs[attr].setValue(target);
+    this->updateCleanFlag();
   }
   void updateCleanFlag() {
     for (int i = 0; i < STEP_ATTRS_TOTAL; i++) {
@@ -594,6 +610,11 @@ struct Pattern {
   void mutate(float factor) {
     for (int i = 0; i < NUM_STEPS; i++) {
       this->steps[i].mutate(factor);
+    }
+  }
+  void scaleMutation(float factor) {
+    for (int i = 0; i < NUM_STEPS; i++) {
+      this->steps[i].scaleMutation(factor);
     }
   }
   void resetMutation() {

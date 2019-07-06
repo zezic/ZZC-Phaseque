@@ -113,6 +113,14 @@ struct Phaseque : Module {
     GLOBAL_SHIFT_PARAM,
     GLOBAL_LEN_PARAM,
     WAIT_SWITCH_PARAM,
+    PATTERN_RESO_PARAM,
+    PATTERN_SHIFT_PARAM,
+    PATTERN_MUTA_PARAM,
+    ENUMS(STEP_VALUE_PARAM, NUM_STEPS),
+    ENUMS(STEP_SHIFT_PARAM, NUM_STEPS),
+    ENUMS(STEP_LEN_PARAM, NUM_STEPS),
+    ENUMS(STEP_EXPR_IN_PARAM, NUM_STEPS),
+    ENUMS(STEP_EXPR_OUT_PARAM, NUM_STEPS),
     NUM_PARAMS
   };
   enum InputIds {
@@ -289,6 +297,8 @@ struct Phaseque : Module {
 
   bool polyphonic = false;
   bool stepsStates[NUM_STEPS] = { false };
+
+	dsp::ClockDivider lightDivider;
 
   void goToPattern(int targetIdx) {
     if (targetIdx < 1) { targetIdx = NUM_PATTERNS; }
@@ -630,6 +640,37 @@ struct Phaseque : Module {
     outputs[PHASE_OUTPUT].setVoltage(stepPhase * 10.0f, channel);
   }
 
+  void processIndicators() {
+		if (!lightDivider.process()) {
+      return;
+    }
+
+    lights[GATE_LIGHT].setBrightness(outputs[GATE_OUTPUT].getVoltageSum() / 10.f);
+
+    float v = outputs[V_OUTPUT].getVoltageSum();
+    lights[V_POS_LIGHT].setBrightness(std::max(v * 0.5f, 0.0f));
+    lights[V_NEG_LIGHT].setBrightness(std::max(v * -0.5f, 0.0f));
+
+    float shift = outputs[SHIFT_OUTPUT].getVoltageSum() / 5.f;
+    lights[SHIFT_POS_LIGHT].setBrightness(std::max(shift, 0.0f));
+    lights[SHIFT_NEG_LIGHT].setBrightness(std::max(-shift, 0.0f));
+
+    float len = outputs[LEN_OUTPUT].getVoltageSum() / 5.f;
+    lights[LEN_POS_LIGHT].setBrightness(std::max(len, 0.0f));
+    lights[LEN_NEG_LIGHT].setBrightness(std::max(-len, 0.0f));
+
+    float expr = outputs[EXPR_OUTPUT].getVoltageSum() / 5.f;
+    lights[EXPR_POS_LIGHT].setBrightness(std::max(expr, 0.0f));
+    lights[EXPR_NEG_LIGHT].setBrightness(std::max(-expr, 0.0f));
+
+    float curve = outputs[EXPR_CURVE_OUTPUT].getVoltageSum() / 5.f;
+    lights[EXPR_CURVE_POS_LIGHT].setBrightness(std::max(curve, 0.0f));
+    lights[EXPR_CURVE_NEG_LIGHT].setBrightness(std::max(-curve, 0.0f));
+
+    float stepPhase = outputs[PHASE_OUTPUT].getVoltageSum() / 5.f;
+    lights[PHASE_LIGHT].setBrightness(stepPhase);
+  }
+
   Phaseque() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
     configParam(TEMPO_TRACK_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
@@ -646,8 +687,16 @@ struct Phaseque : Module {
     configParam(LEN_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
     configParam(REV_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
     configParam(FLIP_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
+    configParam(PATTERN_RESO_PARAM, 1.0f, 99.0f, 8.0f);
+    configParam(PATTERN_SHIFT_PARAM, -1.0f, 1.0f, 0.0f);
+    configParam(PATTERN_MUTA_PARAM, 0.0f, 10.0f, 0.0f);
     for (int i = 0; i < NUM_STEPS; i++) {
       configParam(GATE_SWITCH_PARAM + i, 0.0f, 1.0f, 0.0f);
+      configParam(STEP_VALUE_PARAM + i, -2.0f, 2.0f, 0.0f);
+      configParam(STEP_SHIFT_PARAM + i, -1.0f / NUM_STEPS, 1.0f / NUM_STEPS, 0.0f);
+      configParam(STEP_LEN_PARAM + i, 0.0f, 1.0f / NUM_STEPS * 2.0f, 1.0f / NUM_STEPS);
+      configParam(STEP_EXPR_IN_PARAM + i, -1.0f, 1.0f, 0.0f);
+      configParam(STEP_EXPR_OUT_PARAM + i, -1.0f, 1.0f, 0.0f);
     }
     for (int i = 0; i <= NUM_PATTERNS; i++) {
       patterns[i].init();
@@ -659,6 +708,7 @@ struct Phaseque : Module {
     lights[TEMPO_TRACK_LED].value = tempoTrack ? 1.0f : 0.0f;
     lights[ABS_MODE_LED].value = absMode ? 1.0f : 0.0f;
     lights[CLUTCH_LED].value = clutch ? 1.0f : 0.0f;
+		lightDivider.setDivision(16);
   }
   void process(const ProcessArgs &args) override;
 
@@ -685,6 +735,9 @@ struct Phaseque : Module {
   void mutate(float factor) {
     this->pattern.mutate(factor);
   }
+  void scaleMutation(float factor) {
+    this->pattern.scaleMutation(factor);
+  }
   void resetMutation() {
     this->pattern.resetMutation();
   }
@@ -696,12 +749,19 @@ struct Phaseque : Module {
     this->pattern.steps[stepNumber].setAttr(attr, factor);
   }
 
+  void setStepAttrAbs(int stepNumber, int attr, float target) {
+    this->pattern.steps[stepNumber].setAttrAbs(attr, target);
+  }
+
   void resetStepAttr(int stepNumber, int attr) {
     this->pattern.steps[stepNumber].resetAttr(attr);
   }
 
   void setPatternReso(float factor) {
     this->pattern.resolution = roundf(clamp(this->pattern.resolution + factor, 1.0f, 99.0f));
+  }
+  void setPatternResoAbs(float target) {
+    this->pattern.resolution = roundf(clamp(target, 1.0f, 99.0f));
   }
   void resetPatternReso() {
     this->pattern.resolution = 8.0f;
@@ -862,6 +922,11 @@ struct ZZC_PhasequePatternResoKnob : ZZC_CallbackKnob {
       }
     }
   }
+  void onAbsInput(float value) override {
+    if (phaseq) {
+      phaseq->setPatternResoAbs(value);
+    }
+  }
   void onReset() override {
     if (phaseq) {
       phaseq->resetPatternReso();
@@ -885,6 +950,11 @@ struct ZZC_PhasequePatternShiftKnob : ZZC_CallbackKnob {
   void onInput(float factor) override {
     if (phaseq) {
       phaseq->setPatternShift(factor);
+    }
+  }
+  void onAbsInput(float value) override {
+    if (phaseq) {
+      phaseq->setPatternShift(value);
     }
   }
   void onReset() override {
@@ -911,6 +981,11 @@ struct ZZC_PhasequeMutaKnob : ZZC_CallbackKnob {
       phaseq->mutate(factor);
     }
   }
+  void onAbsInput(float value) override {
+    if (phaseq) {
+      phaseq->scaleMutation(value);
+    }
+  }
   void onReset() override {
     if (phaseq) {
       phaseq->resetMutation();
@@ -926,6 +1001,11 @@ struct ZZC_PhasequeStepAttrKnob : ZZC_CallbackKnob {
   void onInput(float factor) override {
     if (phaseq) {
       phaseq->setStepAttr(item, attr, factor);
+    }
+  }
+  void onAbsInput(float value) override {
+    if (phaseq) {
+      phaseq->setStepAttrAbs(item, attr, value);
     }
   }
   void onReset() override {
@@ -1196,10 +1276,8 @@ void Phaseque::process(const ProcessArgs &args) {
   if (!polyphonic) {
     if (retrigGap || !clutch) {
       outputs[GATE_OUTPUT].setVoltage(0.0f);
-      lights[GATE_LIGHT].setBrightness(0.0f);
     } else {
       outputs[GATE_OUTPUT].setVoltage(activeStep ? 10.0f : 0.0f);
-      lights[GATE_LIGHT].setBrightness(activeStep ? 1.0f : 0.0f);
     }
   }
   if (polyphonic) {
@@ -1215,8 +1293,12 @@ void Phaseque::process(const ProcessArgs &args) {
           outputs[PHASE_OUTPUT]
         );
         outputs[GATE_OUTPUT].setVoltage(10.f, i);
+        outputs[STEP_GATE_OUTPUT + i].setVoltage(10.f);
+        lights[STEP_GATE_LIGHT + i].setBrightness(1.f);
       } else {
         outputs[GATE_OUTPUT].setVoltage(0.f, i);
+        outputs[STEP_GATE_OUTPUT + i].setVoltage(0.f);
+        lights[STEP_GATE_LIGHT + i].setBrightness(0.f);
       }
     }
     outputs[GATE_OUTPUT].setChannels(NUM_STEPS);
@@ -1226,6 +1308,8 @@ void Phaseque::process(const ProcessArgs &args) {
     outputs[EXPR_OUTPUT].setChannels(NUM_STEPS);
     outputs[EXPR_CURVE_OUTPUT].setChannels(NUM_STEPS);
     outputs[PHASE_OUTPUT].setChannels(NUM_STEPS);
+
+    processIndicators();
   } else {
     if (activeStep) {
       renderStep(
@@ -1237,18 +1321,15 @@ void Phaseque::process(const ProcessArgs &args) {
         outputs[EXPR_CURVE_OUTPUT],
         outputs[PHASE_OUTPUT]
       );
+      outputs[GATE_OUTPUT].setChannels(1);
+      outputs[V_OUTPUT].setChannels(1);
+      outputs[SHIFT_OUTPUT].setChannels(1);
+      outputs[LEN_OUTPUT].setChannels(1);
+      outputs[EXPR_OUTPUT].setChannels(1);
+      outputs[EXPR_CURVE_OUTPUT].setChannels(1);
+      outputs[PHASE_OUTPUT].setChannels(1);
 
-      // lights[V_POS_LIGHT].setBrightness(std::max(v * 0.5f, 0.0f));
-      // lights[V_NEG_LIGHT].setBrightness(std::max(v * -0.5f, 0.0f));
-      // lights[SHIFT_POS_LIGHT].setBrightness(std::max(shift, 0.0f));
-      // lights[SHIFT_NEG_LIGHT].setBrightness(std::max(-shift, 0.0f));
-      // lights[LEN_POS_LIGHT].setBrightness(std::max(len, 0.0f));
-      // lights[LEN_NEG_LIGHT].setBrightness(std::max(-len, 0.0f));
-      // lights[EXPR_POS_LIGHT].setBrightness(std::max(expr, 0.0f));
-      // lights[EXPR_NEG_LIGHT].setBrightness(std::max(-expr, 0.0f));
-      // lights[EXPR_CURVE_POS_LIGHT].setBrightness(std::max(curve, 0.0f));
-      // lights[EXPR_CURVE_NEG_LIGHT].setBrightness(std::max(-curve, 0.0f));
-      // lights[PHASE_LIGHT].setBrightness(stepPhase);
+      processIndicators();
 
       for (int i = 0; i < NUM_STEPS; i++) {
         outputs[STEP_GATE_OUTPUT + i].setVoltage(activeStep->idx == i ? 10.0f : 0.0f);
@@ -1326,6 +1407,7 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
   patternResoKnob->box.pos = Vec(154, 80.8f);
   if (module) {
     patternResoKnob->phaseq = module;
+    patternResoKnob->paramQuantity = module->paramQuantities[Phaseque::PATTERN_RESO_PARAM];
   }
   addChild(patternResoKnob);
 
@@ -1379,6 +1461,8 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
     patternDisplay->activeStep = &module->activeStep;
     patternDisplay->direction = &module->direction;
     patternDisplay->globalGate = &module->globalGate;
+    patternDisplay->polyphonic = &module->polyphonic;
+    patternDisplay->stepsStates = module->stepsStates;
   }
   addChild(patternDisplay);
 
@@ -1406,6 +1490,7 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
   if (module) {
     patternShiftKnob->phaseq = module;
     patternShiftKnob->attachValue(&module->pattern.shift, -baseStepLen, baseStepLen, 0.0f);
+    patternShiftKnob->paramQuantity = module->paramQuantities[Phaseque::PATTERN_SHIFT_PARAM];
   }
   addChild(patternShiftKnob);
 
@@ -1424,6 +1509,7 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
   mutaKnob->box.pos = Vec(153, 318);
   if (module) {
     mutaKnob->phaseq = module;
+    mutaKnob->paramQuantity = module->paramQuantities[Phaseque::PATTERN_MUTA_PARAM];
   }
   addChild(mutaKnob);
 
@@ -1444,6 +1530,7 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
       valueKnob->item = i;
       valueKnob->attr = STEP_VALUE;
       valueKnob->attachValue(&module->pattern.steps[i].attrs[STEP_VALUE].value, -2.0f, 2.0f, 0.0f);
+      valueKnob->paramQuantity = module->paramQuantities[Phaseque::STEP_VALUE_PARAM + i];
     }
     addChild(valueKnob);
 
@@ -1457,6 +1544,7 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
       shiftKnob->item = i;
       shiftKnob->attr = STEP_SHIFT;
       shiftKnob->attachValue(&module->pattern.steps[i].attrs[STEP_SHIFT].value, -baseStepLen, baseStepLen, 0.0f);
+      shiftKnob->paramQuantity = module->paramQuantities[Phaseque::STEP_SHIFT_PARAM + i];
     }
     addChild(shiftKnob);
 
@@ -1467,6 +1555,7 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
       lenKnob->item = i;
       lenKnob->attr = STEP_LEN;
       lenKnob->attachValue(&module->pattern.steps[i].attrs[STEP_LEN].value, 0.0f, baseStepLen * 2.0f, baseStepLen);
+      lenKnob->paramQuantity = module->paramQuantities[Phaseque::STEP_LEN_PARAM + i];
     }
     addChild(lenKnob);
 
@@ -1477,6 +1566,7 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
       exprInKnob->item = i;
       exprInKnob->attr = STEP_EXPR_IN;
       exprInKnob->attachValue(&module->pattern.steps[i].attrs[STEP_EXPR_IN].value, -1.0f, 1.0f, 0.0f);
+      exprInKnob->paramQuantity = module->paramQuantities[Phaseque::STEP_EXPR_IN_PARAM + i];
       exprInKnob->enableColor();
     }
     addChild(exprInKnob);
@@ -1503,6 +1593,7 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
       exprOutKnob->item = i;
       exprOutKnob->attr = STEP_EXPR_OUT;
       exprOutKnob->attachValue(&module->pattern.steps[i].attrs[STEP_EXPR_OUT].value, -1.0f, 1.0f, 0.0f);
+      exprOutKnob->paramQuantity = module->paramQuantities[Phaseque::STEP_EXPR_OUT_PARAM + i];
       exprOutKnob->enableColor();
     }
     addChild(exprOutKnob);

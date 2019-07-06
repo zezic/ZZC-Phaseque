@@ -18,6 +18,8 @@ struct PatternDisplayWidget : BaseDisplayWidget {
   float *globalValueParam = nullptr;
   bool *globalGate = nullptr;
   Pattern dummyPattern;
+  bool *polyphonic = nullptr;
+  bool *stepsStates = nullptr;
 
   NVGcolor lcdGhostColor = nvgRGB(0x1e, 0x1f, 0x1d);
   NVGcolor lcdActiveColor = nvgRGB(0xff, 0xd4, 0x2a);
@@ -56,13 +58,13 @@ struct PatternDisplayWidget : BaseDisplayWidget {
   }
 
   void drawDash(const DrawArgs &args, Vec position) {
-		nvgStrokeColor(args.vg, lcdGhostColor);
-		nvgStrokeWidth(args.vg, 1.0f);
+    nvgStrokeColor(args.vg, lcdGhostColor);
+    nvgStrokeWidth(args.vg, 1.0f);
 
     nvgBeginPath(args.vg);
     nvgMoveTo(args.vg, position.x - 5.5f, position.y);
     nvgLineTo(args.vg, position.x + 5.5f, position.y);
-		nvgStroke(args.vg);
+    nvgStroke(args.vg);
   }
 
   void drawCross(const DrawArgs &args, Vec position) {
@@ -71,13 +73,13 @@ struct PatternDisplayWidget : BaseDisplayWidget {
     nvgBeginPath(args.vg);
     nvgMoveTo(args.vg, position.x, position.y - 5.5f);
     nvgLineTo(args.vg, position.x, position.y + 5.5f);
-		nvgStroke(args.vg);
+    nvgStroke(args.vg);
   }
 
   void drawResolution(const DrawArgs &args) {
     float resolutionVal = resolution ? *resolution : 8.0;
     float phaseVal = phase ? *phase : 0.0f;
-		nvgStrokeWidth(args.vg, 1.0f);
+    nvgStrokeWidth(args.vg, 1.0f);
     float periodSize = area.x / resolutionVal;
     for (float i = 0.0f; i < resolutionVal; i = i + 1.0f) {
       if (phaseVal * resolutionVal >= i && phaseVal * resolutionVal < i + 1) {
@@ -152,11 +154,11 @@ struct PatternDisplayWidget : BaseDisplayWidget {
     if (pattern && globalGate) {
       nvgStrokeColor(args.vg, lcdDisabledColor);
       nvgFillColor(args.vg, lcdDisabledColor);
-        for (int i = 0; i < NUM_STEPS; i++) {
-          if (!pattern->steps[i].gate ^ !*globalGate) {
-            drawStep(args, pattern->steps[i]);
-          }
+      for (int i = 0; i < NUM_STEPS; i++) {
+        if (!pattern->steps[i].gate ^ !*globalGate) {
+          drawStep(args, pattern->steps[i]);
         }
+      }
       nvgStrokeColor(args.vg, lcdDimmedColor);
       nvgFillColor(args.vg, lcdDimmedColor);
       for (int i = 0; i < NUM_STEPS; i++) {
@@ -164,13 +166,21 @@ struct PatternDisplayWidget : BaseDisplayWidget {
           drawStep(args, pattern->steps[i]);
         }
       }
-      if (*activeStep) {
-        Step *activeStepPtr = *activeStep;
-        if (activeStepPtr) {
-          Step activeStepCopy = *activeStepPtr;
-          nvgStrokeColor(args.vg, lcdActiveColor);
-          nvgFillColor(args.vg, lcdActiveColor);
-          drawStep(args, activeStepCopy);
+      nvgStrokeColor(args.vg, lcdActiveColor);
+      nvgFillColor(args.vg, lcdActiveColor);
+      if (*polyphonic) {
+        for (int i = 0; i < NUM_STEPS; i++) {
+          if (stepsStates[i]) {
+            drawStep(args, pattern->steps[i]);
+          }
+        }
+      } else {
+        if (*activeStep) {
+          Step *activeStepPtr = *activeStep;
+          if (activeStepPtr) {
+            Step activeStepCopy = *activeStepPtr;
+            drawStep(args, activeStepCopy);
+          }
         }
       }
     } else {
