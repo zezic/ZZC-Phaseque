@@ -298,7 +298,7 @@ struct Phaseque : Module {
   bool polyphonic = false;
   bool stepsStates[NUM_STEPS] = { false };
 
-	dsp::ClockDivider lightDivider;
+  dsp::ClockDivider lightDivider;
 
   void goToPattern(int targetIdx) {
     if (targetIdx < 1) { targetIdx = NUM_PATTERNS; }
@@ -641,7 +641,7 @@ struct Phaseque : Module {
   }
 
   void processIndicators() {
-		if (!lightDivider.process()) {
+    if (!lightDivider.process()) {
       return;
     }
 
@@ -671,6 +671,17 @@ struct Phaseque : Module {
     lights[PHASE_LIGHT].setBrightness(stepPhase);
   }
 
+  struct PatternResoParamQuantity : ParamQuantity {
+    void setValue(float value) override {
+      if (!module)
+        return;
+      Phaseque* phaseq = static_cast<Phaseque*>(module);
+      value = math::clampSafe(value, getMinValue(), getMaxValue());
+      phaseq->setPatternReso(value);
+      APP->engine->setParam(module, paramId, value);
+    }
+  };
+
   Phaseque() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
     configParam(TEMPO_TRACK_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
@@ -687,7 +698,7 @@ struct Phaseque : Module {
     configParam(LEN_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
     configParam(REV_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
     configParam(FLIP_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
-    configParam(PATTERN_RESO_PARAM, 1.0f, 99.0f, 8.0f);
+    configParam<PatternResoParamQuantity>(PATTERN_RESO_PARAM, 1.0f, 99.0f, 8.0f, "Pattern Resolution");
     configParam(PATTERN_SHIFT_PARAM, -1.0f, 1.0f, 0.0f);
     configParam(PATTERN_MUTA_PARAM, 0.0f, 10.0f, 0.0f);
     for (int i = 0; i < NUM_STEPS; i++) {
@@ -708,7 +719,7 @@ struct Phaseque : Module {
     lights[TEMPO_TRACK_LED].value = tempoTrack ? 1.0f : 0.0f;
     lights[ABS_MODE_LED].value = absMode ? 1.0f : 0.0f;
     lights[CLUTCH_LED].value = clutch ? 1.0f : 0.0f;
-		lightDivider.setDivision(16);
+    lightDivider.setDivision(16);
   }
   void process(const ProcessArgs &args) override;
 
@@ -757,10 +768,7 @@ struct Phaseque : Module {
     this->pattern.steps[stepNumber].resetAttr(attr);
   }
 
-  void setPatternReso(float factor) {
-    this->pattern.resolution = roundf(clamp(this->pattern.resolution + factor, 1.0f, 99.0f));
-  }
-  void setPatternResoAbs(float target) {
+  void setPatternReso(float target) {
     this->pattern.resolution = roundf(clamp(target, 1.0f, 99.0f));
   }
   void resetPatternReso() {
@@ -897,39 +905,67 @@ struct Phaseque : Module {
   }
 };
 
-struct ZZC_PhasequePatternResoKnob : ZZC_CallbackKnob {
+struct PhasequePatternResoChange : history::ModuleAction {
+  int patternNum;
+  float oldValue;
+  float newValue;
+
+  void undo() override {
+    app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
+    assert(mw);
+    Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
+    phaseq->patterns[patternNum].resolution = oldValue;
+    if (phaseq->patternIdx == patternNum) {
+      phaseq->pattern.resolution = oldValue;
+    }
+  }
+
+  void redo() override {
+    app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
+    assert(mw);
+    Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
+    phaseq->patterns[patternNum].resolution = newValue;
+    if (phaseq->patternIdx == patternNum) {
+      phaseq->pattern.resolution = newValue;
+    }
+  }
+
+  PhasequePatternResoChange() {
+    name = "change pattern resolution";
+  }
+};
+
+struct ZZC_PhasequePatternResoKnob : SvgKnob {
   Phaseque* phaseq = nullptr;
-  float acc = 0.0f;
 
   ZZC_PhasequePatternResoKnob() {
-    showDisplay = false;
     setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-25-Encoder.svg")));
     shadow->box.size = Vec(29, 29);
     shadow->box.pos = Vec(-2, 2);
     shadow->blurRadius = 15.0f;
     shadow->opacity = 1.0f;
+    // speed = 8.f;
+    smooth = false;
+    maxAngle = M_PI * 4;
   }
 
-  void onInput(float factor) override {
+  void onDragEnd(const event::DragEnd &e) override {
+    if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+      return;
+
+    APP->window->cursorUnlock();
+
     if (phaseq) {
-      acc += factor * 8.0f;
-      if (acc > 1.0f) {
-        phaseq->setPatternReso(1.0f);
-        acc = 0.0f;
-      } else if (acc < -1.0f) {
-        phaseq->setPatternReso(-1.0f);
-        acc = 0.0f;
+      float newValue = phaseq->pattern.resolution;
+      if (oldValue != newValue) {
+        // Push ParamChange history action
+        PhasequePatternResoChange *h = new PhasequePatternResoChange;
+        h->moduleId = paramQuantity->module->id;
+        h->patternNum = phaseq->patternIdx;
+        h->oldValue = oldValue;
+        h->newValue = newValue;
+        APP->history->push(h);
       }
-    }
-  }
-  void onAbsInput(float value) override {
-    if (phaseq) {
-      phaseq->setPatternResoAbs(value);
-    }
-  }
-  void onReset() override {
-    if (phaseq) {
-      phaseq->resetPatternReso();
     }
   }
 };
@@ -1485,14 +1521,14 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
   addParam(createParam<ZZC_LEDBezelDark>(Vec(120.3f, 278.3f), module, Phaseque::SHIFT_LEFT_SWITCH_PARAM));
   addChild(createLight<LedLight<ZZC_YellowLight>>(Vec(122.1f, 280.0f), module, Phaseque::SHIFT_LEFT_LED));
 
-  ZZC_PhasequePatternShiftKnob *patternShiftKnob = new ZZC_PhasequePatternShiftKnob();
-  patternShiftKnob->box.pos = Vec(150.5f, 273.5f);
-  if (module) {
-    patternShiftKnob->phaseq = module;
-    patternShiftKnob->attachValue(&module->pattern.shift, -baseStepLen, baseStepLen, 0.0f);
-    patternShiftKnob->paramQuantity = module->paramQuantities[Phaseque::PATTERN_SHIFT_PARAM];
-  }
-  addChild(patternShiftKnob);
+  // ZZC_PhasequePatternShiftKnob *patternShiftKnob = new ZZC_PhasequePatternShiftKnob();
+  // patternShiftKnob->box.pos = Vec(150.5f, 273.5f);
+  // if (module) {
+  //   patternShiftKnob->phaseq = module;
+  //   patternShiftKnob->attachValue(&module->pattern.shift, -baseStepLen, baseStepLen, 0.0f);
+  //   patternShiftKnob->paramQuantity = module->paramQuantities[Phaseque::PATTERN_SHIFT_PARAM];
+  // }
+  // addChild(patternShiftKnob);
 
   addParam(createParam<ZZC_LEDBezelDark>(Vec(190.3f, 278.3f), module, Phaseque::SHIFT_RIGHT_SWITCH_PARAM));
   addChild(createLight<LedLight<ZZC_YellowLight>>(Vec(192.1f, 280.0f), module, Phaseque::SHIFT_RIGHT_LED));
@@ -1505,13 +1541,13 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
 
   addInput(createInput<ZZC_PJ_Port>(Vec(119, 319.75f), module, Phaseque::MUTA_DEC_INPUT));
 
-  ZZC_PhasequeMutaKnob *mutaKnob = new ZZC_PhasequeMutaKnob();
-  mutaKnob->box.pos = Vec(153, 318);
-  if (module) {
-    mutaKnob->phaseq = module;
-    mutaKnob->paramQuantity = module->paramQuantities[Phaseque::PATTERN_MUTA_PARAM];
-  }
-  addChild(mutaKnob);
+  // ZZC_PhasequeMutaKnob *mutaKnob = new ZZC_PhasequeMutaKnob();
+  // mutaKnob->box.pos = Vec(153, 318);
+  // if (module) {
+  //   mutaKnob->phaseq = module;
+  //   mutaKnob->paramQuantity = module->paramQuantities[Phaseque::PATTERN_MUTA_PARAM];
+  // }
+  // addChild(mutaKnob);
 
   addInput(createInput<ZZC_PJ_Port>(Vec(189, 319.75f), module, Phaseque::MUTA_INC_INPUT));
 
@@ -1523,80 +1559,80 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
   float stepPeriod = 35.0f;
   float stepsAreaX = 614.0;
   for (int i = 0; i < NUM_STEPS; i++) {
-    ZZC_PhasequeStepAttrKnob23 *valueKnob = new ZZC_PhasequeStepAttrKnob23();
-    valueKnob->box.pos = Vec(stepsAreaX + stepPeriod * i - 0.5f, 48);
-    if (module) {
-      valueKnob->phaseq = module;
-      valueKnob->item = i;
-      valueKnob->attr = STEP_VALUE;
-      valueKnob->attachValue(&module->pattern.steps[i].attrs[STEP_VALUE].value, -2.0f, 2.0f, 0.0f);
-      valueKnob->paramQuantity = module->paramQuantities[Phaseque::STEP_VALUE_PARAM + i];
-    }
-    addChild(valueKnob);
+    // ZZC_PhasequeStepAttrKnob23 *valueKnob = new ZZC_PhasequeStepAttrKnob23();
+    // valueKnob->box.pos = Vec(stepsAreaX + stepPeriod * i - 0.5f, 48);
+    // if (module) {
+    //   valueKnob->phaseq = module;
+    //   valueKnob->item = i;
+    //   valueKnob->attr = STEP_VALUE;
+    //   valueKnob->attachValue(&module->pattern.steps[i].attrs[STEP_VALUE].value, -2.0f, 2.0f, 0.0f);
+    //   valueKnob->paramQuantity = module->paramQuantities[Phaseque::STEP_VALUE_PARAM + i];
+    // }
+    // addChild(valueKnob);
 
-    addParam(createParam<ZZC_LEDBezelDark>(Vec(stepsAreaX + 3.3f + stepPeriod * i, 82.3f), module, Phaseque::GATE_SWITCH_PARAM + i));
-    addChild(createLight<LedLight<ZZC_YellowLight>>(Vec(stepsAreaX + 5.1f + stepPeriod * i, 84.0f), module, Phaseque::GATE_SWITCH_LED + i));
+    // addParam(createParam<ZZC_LEDBezelDark>(Vec(stepsAreaX + 3.3f + stepPeriod * i, 82.3f), module, Phaseque::GATE_SWITCH_PARAM + i));
+    // addChild(createLight<LedLight<ZZC_YellowLight>>(Vec(stepsAreaX + 5.1f + stepPeriod * i, 84.0f), module, Phaseque::GATE_SWITCH_LED + i));
 
-    ZZC_PhasequeStepAttrKnob21 *shiftKnob = new ZZC_PhasequeStepAttrKnob21();
-    shiftKnob->box.pos = Vec(stepsAreaX + 0.5f + stepPeriod * i, 110.5f);
-    if (module) {
-      shiftKnob->phaseq = module;
-      shiftKnob->item = i;
-      shiftKnob->attr = STEP_SHIFT;
-      shiftKnob->attachValue(&module->pattern.steps[i].attrs[STEP_SHIFT].value, -baseStepLen, baseStepLen, 0.0f);
-      shiftKnob->paramQuantity = module->paramQuantities[Phaseque::STEP_SHIFT_PARAM + i];
-    }
-    addChild(shiftKnob);
+    // ZZC_PhasequeStepAttrKnob21 *shiftKnob = new ZZC_PhasequeStepAttrKnob21();
+    // shiftKnob->box.pos = Vec(stepsAreaX + 0.5f + stepPeriod * i, 110.5f);
+    // if (module) {
+    //   shiftKnob->phaseq = module;
+    //   shiftKnob->item = i;
+    //   shiftKnob->attr = STEP_SHIFT;
+    //   shiftKnob->attachValue(&module->pattern.steps[i].attrs[STEP_SHIFT].value, -baseStepLen, baseStepLen, 0.0f);
+    //   shiftKnob->paramQuantity = module->paramQuantities[Phaseque::STEP_SHIFT_PARAM + i];
+    // }
+    // addChild(shiftKnob);
 
-    ZZC_PhasequeStepAttrKnob21 *lenKnob = new ZZC_PhasequeStepAttrKnob21();
-    lenKnob->box.pos = Vec(stepsAreaX + 0.5f + stepPeriod * i, 141.5f);
-    if (module) {
-      lenKnob->phaseq = module;
-      lenKnob->item = i;
-      lenKnob->attr = STEP_LEN;
-      lenKnob->attachValue(&module->pattern.steps[i].attrs[STEP_LEN].value, 0.0f, baseStepLen * 2.0f, baseStepLen);
-      lenKnob->paramQuantity = module->paramQuantities[Phaseque::STEP_LEN_PARAM + i];
-    }
-    addChild(lenKnob);
+    // ZZC_PhasequeStepAttrKnob21 *lenKnob = new ZZC_PhasequeStepAttrKnob21();
+    // lenKnob->box.pos = Vec(stepsAreaX + 0.5f + stepPeriod * i, 141.5f);
+    // if (module) {
+    //   lenKnob->phaseq = module;
+    //   lenKnob->item = i;
+    //   lenKnob->attr = STEP_LEN;
+    //   lenKnob->attachValue(&module->pattern.steps[i].attrs[STEP_LEN].value, 0.0f, baseStepLen * 2.0f, baseStepLen);
+    //   lenKnob->paramQuantity = module->paramQuantities[Phaseque::STEP_LEN_PARAM + i];
+    // }
+    // addChild(lenKnob);
 
-    ZZC_PhasequeStepAttrKnob19 *exprInKnob = new ZZC_PhasequeStepAttrKnob19();
-    exprInKnob->box.pos = Vec(stepsAreaX + 1.5f + stepPeriod * i, 176);
-    if (module) {
-      exprInKnob->phaseq = module;
-      exprInKnob->item = i;
-      exprInKnob->attr = STEP_EXPR_IN;
-      exprInKnob->attachValue(&module->pattern.steps[i].attrs[STEP_EXPR_IN].value, -1.0f, 1.0f, 0.0f);
-      exprInKnob->paramQuantity = module->paramQuantities[Phaseque::STEP_EXPR_IN_PARAM + i];
-      exprInKnob->enableColor();
-    }
-    addChild(exprInKnob);
+    // ZZC_PhasequeStepAttrKnob19 *exprInKnob = new ZZC_PhasequeStepAttrKnob19();
+    // exprInKnob->box.pos = Vec(stepsAreaX + 1.5f + stepPeriod * i, 176);
+    // if (module) {
+    //   exprInKnob->phaseq = module;
+    //   exprInKnob->item = i;
+    //   exprInKnob->attr = STEP_EXPR_IN;
+    //   exprInKnob->attachValue(&module->pattern.steps[i].attrs[STEP_EXPR_IN].value, -1.0f, 1.0f, 0.0f);
+    //   exprInKnob->paramQuantity = module->paramQuantities[Phaseque::STEP_EXPR_IN_PARAM + i];
+    //   exprInKnob->enableColor();
+    // }
+    // addChild(exprInKnob);
 
-    PhasequeXYDisplayWidget *exprDisplay = new PhasequeXYDisplayWidget();
-    exprDisplay->box.pos = Vec(stepsAreaX + 1.0f + stepPeriod * i, 207);
-    exprDisplay->box.size = Vec(27, 27);
-    if (module) {
-      exprDisplay->phaseq = module;
-      exprDisplay->item = i;
-      exprDisplay->attrX = STEP_EXPR_POWER;
-      exprDisplay->attrY = STEP_EXPR_CURVE;
-      exprDisplay->x = &module->pattern.steps[i].attrs[STEP_EXPR_POWER].value;
-      exprDisplay->y = &module->pattern.steps[i].attrs[STEP_EXPR_CURVE].value;
-    }
-    exprDisplay->setupSize();
-    exprDisplay->setupPtrs();
-    addChild(exprDisplay);
+    // PhasequeXYDisplayWidget *exprDisplay = new PhasequeXYDisplayWidget();
+    // exprDisplay->box.pos = Vec(stepsAreaX + 1.0f + stepPeriod * i, 207);
+    // exprDisplay->box.size = Vec(27, 27);
+    // if (module) {
+    //   exprDisplay->phaseq = module;
+    //   exprDisplay->item = i;
+    //   exprDisplay->attrX = STEP_EXPR_POWER;
+    //   exprDisplay->attrY = STEP_EXPR_CURVE;
+    //   exprDisplay->x = &module->pattern.steps[i].attrs[STEP_EXPR_POWER].value;
+    //   exprDisplay->y = &module->pattern.steps[i].attrs[STEP_EXPR_CURVE].value;
+    // }
+    // exprDisplay->setupSize();
+    // exprDisplay->setupPtrs();
+    // addChild(exprDisplay);
 
-    ZZC_PhasequeStepAttrKnob19 *exprOutKnob = new ZZC_PhasequeStepAttrKnob19();
-    exprOutKnob->box.pos = Vec(stepsAreaX + 1.5f + stepPeriod * i, 240.5f);
-    if (module) {
-      exprOutKnob->phaseq = module;
-      exprOutKnob->item = i;
-      exprOutKnob->attr = STEP_EXPR_OUT;
-      exprOutKnob->attachValue(&module->pattern.steps[i].attrs[STEP_EXPR_OUT].value, -1.0f, 1.0f, 0.0f);
-      exprOutKnob->paramQuantity = module->paramQuantities[Phaseque::STEP_EXPR_OUT_PARAM + i];
-      exprOutKnob->enableColor();
-    }
-    addChild(exprOutKnob);
+    // ZZC_PhasequeStepAttrKnob19 *exprOutKnob = new ZZC_PhasequeStepAttrKnob19();
+    // exprOutKnob->box.pos = Vec(stepsAreaX + 1.5f + stepPeriod * i, 240.5f);
+    // if (module) {
+    //   exprOutKnob->phaseq = module;
+    //   exprOutKnob->item = i;
+    //   exprOutKnob->attr = STEP_EXPR_OUT;
+    //   exprOutKnob->attachValue(&module->pattern.steps[i].attrs[STEP_EXPR_OUT].value, -1.0f, 1.0f, 0.0f);
+    //   exprOutKnob->paramQuantity = module->paramQuantities[Phaseque::STEP_EXPR_OUT_PARAM + i];
+    //   exprOutKnob->enableColor();
+    // }
+    // addChild(exprOutKnob);
 
     addInput(createInput<ZZC_PJ_Port>(Vec(stepsAreaX + 2.0f + stepPeriod * i, 271), module, Phaseque::STEP_JUMP_INPUT + i));
     addChild(createLight<SmallLight<GreenLight>>(Vec(stepsAreaX + 11.3f + stepPeriod * i, 301.5f), module, Phaseque::STEP_GATE_LIGHT + i));
