@@ -682,6 +682,17 @@ struct Phaseque : Module {
     }
   };
 
+  struct PatternShiftParamQuantity : ParamQuantity {
+    void setValue(float value) override {
+      if (!module)
+        return;
+      Phaseque* phaseq = static_cast<Phaseque*>(module);
+      value = math::clampSafe(value, getMinValue(), getMaxValue());
+      phaseq->setPatternShift(value);
+      APP->engine->setParam(module, paramId, value);
+    }
+  };
+
   Phaseque() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
     configParam(TEMPO_TRACK_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
@@ -699,7 +710,7 @@ struct Phaseque : Module {
     configParam(REV_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
     configParam(FLIP_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
     configParam<PatternResoParamQuantity>(PATTERN_RESO_PARAM, 1.0f, 99.0f, 8.0f, "Pattern Resolution");
-    configParam(PATTERN_SHIFT_PARAM, -1.0f, 1.0f, 0.0f);
+    configParam<PatternShiftParamQuantity>(PATTERN_SHIFT_PARAM, -1.0f, 1.0f, 0.0f, "Pattern Shift");
     configParam(PATTERN_MUTA_PARAM, 0.0f, 10.0f, 0.0f);
     for (int i = 0; i < NUM_STEPS; i++) {
       configParam(GATE_SWITCH_PARAM + i, 0.0f, 1.0f, 0.0f);
@@ -775,8 +786,11 @@ struct Phaseque : Module {
     this->pattern.resolution = 8.0f;
   }
 
-  void setPatternShift(float factor) {
+  void adjPatternShift(float factor) {
     this->pattern.shift = clamp(this->pattern.shift + factor, -baseStepLen, baseStepLen);
+  }
+  void setPatternShift(float value) {
+    this->pattern.shift = clamp(value * baseStepLen, -baseStepLen, baseStepLen);
   }
   void resetPatternShift() {
     this->pattern.shift = 0.0f;
@@ -821,6 +835,8 @@ struct Phaseque : Module {
 
   void takeOutCurrentPattern() {
     pattern = patterns[patternIdx];
+    paramQuantities[PATTERN_RESO_PARAM]->setValue(pattern.resolution);
+    paramQuantities[PATTERN_SHIFT_PARAM]->setValue(pattern.shift / baseStepLen);
     refreshPatternPointers();
   }
 
@@ -906,6 +922,7 @@ struct Phaseque : Module {
 };
 
 struct PhasequePatternResoChange : history::ModuleAction {
+  int paramId;
   int patternNum;
   float oldValue;
   float newValue;
@@ -917,6 +934,7 @@ struct PhasequePatternResoChange : history::ModuleAction {
     phaseq->patterns[patternNum].resolution = oldValue;
     if (phaseq->patternIdx == patternNum) {
       phaseq->pattern.resolution = oldValue;
+      mw->module->params[paramId].value = oldValue;
     }
   }
 
@@ -927,6 +945,7 @@ struct PhasequePatternResoChange : history::ModuleAction {
     phaseq->patterns[patternNum].resolution = newValue;
     if (phaseq->patternIdx == patternNum) {
       phaseq->pattern.resolution = newValue;
+      mw->module->params[paramId].value = newValue;
     }
   }
 
@@ -936,8 +955,6 @@ struct PhasequePatternResoChange : history::ModuleAction {
 };
 
 struct ZZC_PhasequePatternResoKnob : SvgKnob {
-  Phaseque* phaseq = nullptr;
-
   ZZC_PhasequePatternResoKnob() {
     setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-25-Encoder.svg")));
     shadow->box.size = Vec(29, 29);
@@ -946,6 +963,7 @@ struct ZZC_PhasequePatternResoKnob : SvgKnob {
     shadow->opacity = 1.0f;
     // speed = 8.f;
     smooth = false;
+    snap = true;
     maxAngle = M_PI * 4;
   }
 
@@ -955,50 +973,148 @@ struct ZZC_PhasequePatternResoKnob : SvgKnob {
 
     APP->window->cursorUnlock();
 
-    if (phaseq) {
-      float newValue = phaseq->pattern.resolution;
+    if (paramQuantity) {
+      float newValue = paramQuantity->getValue();
       if (oldValue != newValue) {
-        // Push ParamChange history action
         PhasequePatternResoChange *h = new PhasequePatternResoChange;
         h->moduleId = paramQuantity->module->id;
+        h->paramId = paramQuantity->paramId;
+        Phaseque* phaseq = static_cast<Phaseque*>(paramQuantity->module);
         h->patternNum = phaseq->patternIdx;
         h->oldValue = oldValue;
         h->newValue = newValue;
+        h->name = "change pattern " + std::to_string(phaseq->patternIdx) + " resolution";
         APP->history->push(h);
       }
     }
   }
 };
 
-struct ZZC_PhasequePatternShiftKnob : ZZC_CallbackKnob {
-  Phaseque* phaseq = nullptr;
+struct PhasequePatternShiftChange : history::ModuleAction {
+  int paramId;
+  int patternNum;
+  float oldValue;
+  float newValue;
+
+  void undo() override {
+    app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
+    assert(mw);
+    Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
+    phaseq->patterns[patternNum].shift = oldValue;
+    if (phaseq->patternIdx == patternNum) {
+      phaseq->pattern.shift = oldValue;
+      mw->module->params[paramId].value = oldValue;
+    }
+  }
+
+  void redo() override {
+    app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
+    assert(mw);
+    Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
+    phaseq->patterns[patternNum].shift = newValue;
+    if (phaseq->patternIdx == patternNum) {
+      phaseq->pattern.shift = newValue;
+      mw->module->params[paramId].value = newValue;
+    }
+  }
+
+  PhasequePatternShiftChange() {
+    name = "change pattern shift";
+  }
+};
+
+struct ZZC_PhasequePatternShiftKnob : SvgKnob {
+  ZZC_DirectKnobDisplay *disp = nullptr;
 
   ZZC_PhasequePatternShiftKnob() {
-    showDisplay = true;
-    strokeWidth = 1.5;
+    float strokeWidth = 1.5f;
+    float padding = strokeWidth + 2.f;
     setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-25-Encoder.svg")));
     shadow->box.size = Vec(31, 31);
     shadow->box.pos = Vec(0, 2);
     shadow->blurRadius = 15.0f;
     shadow->opacity = 1.0f;
+    // speed = 8.f;
+    // maxAngle = M_PI * 4;
+    smooth = false;
+
+    sw->box.pos = math::Vec(padding, padding);
+    tw->box.size = sw->box.size;
+    math::Vec size = math::Vec(padding * 2, padding * 2).plus(sw->box.size);
+    setSize(size);
+    fb->box.size = size;
+    shadow->box.size = sw->box.size;
+    // Move shadow downward by 20% and take value display into account
+    shadow->box.pos = math::Vec(padding, padding).plus(math::Vec(0, sw->box.size.y * 0.2));
+
+    disp = new ZZC_DirectKnobDisplay();
+    fb->addChild(disp);
+    disp->box.pos = math::Vec(0, 0);
+    disp->strokeWidth = strokeWidth;
+    disp->box.size = fb->box.size;
   }
 
-  void onInput(float factor) override {
-    if (phaseq) {
-      phaseq->setPatternShift(factor);
+  void onDragEnd(const event::DragEnd &e) override {
+    if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+      return;
+
+    APP->window->cursorUnlock();
+
+    if (paramQuantity) {
+      float newValue = paramQuantity->getSmoothValue();
+      if (oldValue != newValue) {
+        PhasequePatternShiftChange *h = new PhasequePatternShiftChange;
+        h->moduleId = paramQuantity->module->id;
+        h->paramId = paramQuantity->paramId;
+        Phaseque* phaseq = static_cast<Phaseque*>(paramQuantity->module);
+        h->patternNum = phaseq->patternIdx;
+        h->oldValue = oldValue;
+        h->newValue = newValue;
+        h->name = "change pattern " + std::to_string(phaseq->patternIdx) + " shift";
+        APP->history->push(h);
+      }
     }
   }
-  void onAbsInput(float value) override {
-    if (phaseq) {
-      phaseq->setPatternShift(value);
+
+  void onChange(const event::Change &e) override {
+    if (paramQuantity) {
+      disp->minVal = paramQuantity->getMinValue();
+      disp->maxVal = paramQuantity->getMaxValue();
+      disp->value = paramQuantity->getValue();
     }
-  }
-  void onReset() override {
-    if (phaseq) {
-      phaseq->resetPatternShift();
-    }
+    SvgKnob::onChange(e);
   }
 };
+
+// struct ZZC_PhasequePatternShiftKnob : ZZC_CallbackKnob {
+//   Phaseque* phaseq = nullptr;
+
+//   ZZC_PhasequePatternShiftKnob() {
+//     showDisplay = true;
+//     strokeWidth = 1.5;
+//     setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-25-Encoder.svg")));
+//     shadow->box.size = Vec(31, 31);
+//     shadow->box.pos = Vec(0, 2);
+//     shadow->blurRadius = 15.0f;
+//     shadow->opacity = 1.0f;
+//   }
+
+//   void onInput(float factor) override {
+//     if (phaseq) {
+//       phaseq->setPatternShift(factor);
+//     }
+//   }
+//   void onAbsInput(float value) override {
+//     if (phaseq) {
+//       phaseq->setPatternShift(value);
+//     }
+//   }
+//   void onReset() override {
+//     if (phaseq) {
+//       phaseq->resetPatternShift();
+//     }
+//   }
+// };
 
 struct ZZC_PhasequeMutaKnob : ZZC_CallbackKnob {
   Phaseque* phaseq = nullptr;
@@ -1439,13 +1555,7 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
   }
   addChild(resolutionDisplay);
 
-  ZZC_PhasequePatternResoKnob *patternResoKnob = new ZZC_PhasequePatternResoKnob();
-  patternResoKnob->box.pos = Vec(154, 80.8f);
-  if (module) {
-    patternResoKnob->phaseq = module;
-    patternResoKnob->paramQuantity = module->paramQuantities[Phaseque::PATTERN_RESO_PARAM];
-  }
-  addChild(patternResoKnob);
+  addParam(createParam<ZZC_PhasequePatternResoKnob>(Vec(154, 80.8f), module, Phaseque::PATTERN_RESO_PARAM));
 
   addInput(createInput<ZZC_PJ_Port>(Vec(224, 81), module, Phaseque::RESET_INPUT));
   addParam(createParam<ZZC_LEDBezelDark>(Vec(225.3f, 51.3f), module, Phaseque::RESET_SWITCH_PARAM));
@@ -1521,6 +1631,7 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
   addParam(createParam<ZZC_LEDBezelDark>(Vec(120.3f, 278.3f), module, Phaseque::SHIFT_LEFT_SWITCH_PARAM));
   addChild(createLight<LedLight<ZZC_YellowLight>>(Vec(122.1f, 280.0f), module, Phaseque::SHIFT_LEFT_LED));
 
+  addParam(createParam<ZZC_PhasequePatternShiftKnob>(Vec(150.5f, 273.5f), module, Phaseque::PATTERN_SHIFT_PARAM));
   // ZZC_PhasequePatternShiftKnob *patternShiftKnob = new ZZC_PhasequePatternShiftKnob();
   // patternShiftKnob->box.pos = Vec(150.5f, 273.5f);
   // if (module) {
