@@ -15,6 +15,23 @@
 #include "PhasequeDisplay.hpp"
 #include "PhasequePatternsDisplay.hpp"
 
+template<size_t c>
+struct ForLoop {
+  template<template <size_t> class Func>
+  static void iterate(Module *module) {
+    Func<c>()(module);
+    if (c > 0) {}
+    ForLoop<c-1>::template iterate<Func>(module);
+  }
+};
+
+template<>
+struct ForLoop<0> {
+  template<template <size_t> class Func>
+  static void iterate(Module *module) {
+    Func<0>()(module);
+  }
+};
 
 struct NegSchmittTrigger : dsp::SchmittTrigger {
   bool process(float in) {
@@ -693,6 +710,42 @@ struct Phaseque : Module {
     }
   };
 
+  struct PatternMutaParamQuantity : ParamQuantity {
+    void setValue(float value) override {
+      if (!module)
+        return;
+      float delta = value - getValue();
+      Phaseque* phaseq = static_cast<Phaseque*>(module);
+      phaseq->mutate(delta);
+      APP->engine->setParam(module, paramId, value);
+    }
+  };
+
+  template <int ITEM, int ATTR>
+  struct StepAttrParamQuantity : ParamQuantity {
+    int item = ITEM;
+    int attr = ATTR;
+
+    void setValue(float value) override {
+      if (!module)
+        return;
+      Phaseque* phaseq = static_cast<Phaseque*>(module);
+      phaseq->setStepAttrAbs(item, attr, value);
+      APP->engine->setParam(module, paramId, value);
+    }
+  };
+  template <size_t size>
+  struct StepParamConfigurator {
+    void operator()(Module *module) {
+      module->configParam(GATE_SWITCH_PARAM + size, 0.0f, 1.0f, 0.0f, "Step Gate");
+      module->configParam<StepAttrParamQuantity<size, STEP_VALUE>>(STEP_VALUE_PARAM + size, -2.0f, 2.0f, 0.0f, "Step Value");
+      // module->configParam(STEP_SHIFT_PARAM + size, -1.0f / NUM_STEPS, 1.0f / NUM_STEPS, 0.0f);
+      // module->configParam(STEP_LEN_PARAM + size, 0.0f, 1.0f / NUM_STEPS * 2.0f, 1.0f / NUM_STEPS);
+      // module->configParam(STEP_EXPR_IN_PARAM + size, -1.0f, 1.0f, 0.0f);
+      // module->configParam(STEP_EXPR_OUT_PARAM + size, -1.0f, 1.0f, 0.0f);
+    }
+  };
+
   Phaseque() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
     configParam(TEMPO_TRACK_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
@@ -711,15 +764,11 @@ struct Phaseque : Module {
     configParam(FLIP_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
     configParam<PatternResoParamQuantity>(PATTERN_RESO_PARAM, 1.0f, 99.0f, 8.0f, "Pattern Resolution");
     configParam<PatternShiftParamQuantity>(PATTERN_SHIFT_PARAM, -1.0f, 1.0f, 0.0f, "Pattern Shift");
-    configParam(PATTERN_MUTA_PARAM, 0.0f, 10.0f, 0.0f);
-    for (int i = 0; i < NUM_STEPS; i++) {
-      configParam(GATE_SWITCH_PARAM + i, 0.0f, 1.0f, 0.0f);
-      configParam(STEP_VALUE_PARAM + i, -2.0f, 2.0f, 0.0f);
-      configParam(STEP_SHIFT_PARAM + i, -1.0f / NUM_STEPS, 1.0f / NUM_STEPS, 0.0f);
-      configParam(STEP_LEN_PARAM + i, 0.0f, 1.0f / NUM_STEPS * 2.0f, 1.0f / NUM_STEPS);
-      configParam(STEP_EXPR_IN_PARAM + i, -1.0f, 1.0f, 0.0f);
-      configParam(STEP_EXPR_OUT_PARAM + i, -1.0f, 1.0f, 0.0f);
-    }
+    configParam<PatternMutaParamQuantity>(PATTERN_MUTA_PARAM, -INFINITY, INFINITY, 0.0f, "Pattern Mutation");
+    // Phaseque* phaseq = static_cast<Phaseque*>(this);
+    ForLoop<NUM_STEPS-1>::iterate<StepParamConfigurator>(this);
+    // for (int i = 0; i < NUM_STEPS; i++) {
+    // }
     for (int i = 0; i <= NUM_PATTERNS; i++) {
       patterns[i].init();
       patterns[i].goTo = i == NUM_PATTERNS ? 1.0f : ((float) (i + 1));
@@ -1023,21 +1072,21 @@ struct PhasequePatternShiftChange : history::ModuleAction {
   }
 };
 
-struct ZZC_PhasequePatternShiftKnob : SvgKnob {
+struct ZZC_DisplayKnob : SvgKnob {
   ZZC_DirectKnobDisplay *disp = nullptr;
+  float strokeWidth = 1.5f;
 
-  ZZC_PhasequePatternShiftKnob() {
-    float strokeWidth = 1.5f;
-    float padding = strokeWidth + 2.f;
-    setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-25-Encoder.svg")));
-    shadow->box.size = Vec(31, 31);
-    shadow->box.pos = Vec(0, 2);
-    shadow->blurRadius = 15.0f;
-    shadow->opacity = 1.0f;
-    // speed = 8.f;
-    // maxAngle = M_PI * 4;
+  ZZC_DisplayKnob() {
     smooth = false;
+    disp = new ZZC_DirectKnobDisplay();
+    fb->addChild(disp);
+    disp->box.pos = math::Vec(0, 0);
+    disp->strokeWidth = strokeWidth;
+    disp->box.size = fb->box.size;
+  }
 
+  void recalcSizes() {
+    float padding = strokeWidth + 2.f;
     sw->box.pos = math::Vec(padding, padding);
     tw->box.size = sw->box.size;
     math::Vec size = math::Vec(padding * 2, padding * 2).plus(sw->box.size);
@@ -1046,12 +1095,29 @@ struct ZZC_PhasequePatternShiftKnob : SvgKnob {
     shadow->box.size = sw->box.size;
     // Move shadow downward by 20% and take value display into account
     shadow->box.pos = math::Vec(padding, padding).plus(math::Vec(0, sw->box.size.y * 0.2));
-
-    disp = new ZZC_DirectKnobDisplay();
-    fb->addChild(disp);
-    disp->box.pos = math::Vec(0, 0);
     disp->strokeWidth = strokeWidth;
     disp->box.size = fb->box.size;
+  }
+
+  void onChange(const event::Change &e) override {
+    if (paramQuantity) {
+      disp->minVal = paramQuantity->getMinValue();
+      disp->maxVal = paramQuantity->getMaxValue();
+      disp->value = paramQuantity->getValue();
+    }
+    SvgKnob::onChange(e);
+  }
+};
+
+struct ZZC_PhasequePatternShiftKnob : ZZC_DisplayKnob {
+  ZZC_PhasequePatternShiftKnob() {
+    setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-25-Encoder.svg")));
+    shadow->box.size = Vec(31, 31);
+    shadow->box.pos = Vec(0, 2);
+    shadow->blurRadius = 15.0f;
+    shadow->opacity = 1.0f;
+    maxAngle = M_PI * 1.5;
+    recalcSizes();
   }
 
   void onDragEnd(const event::DragEnd &e) override {
@@ -1075,114 +1141,38 @@ struct ZZC_PhasequePatternShiftKnob : SvgKnob {
       }
     }
   }
-
-  void onChange(const event::Change &e) override {
-    if (paramQuantity) {
-      disp->minVal = paramQuantity->getMinValue();
-      disp->maxVal = paramQuantity->getMaxValue();
-      disp->value = paramQuantity->getValue();
-    }
-    SvgKnob::onChange(e);
-  }
 };
 
-// struct ZZC_PhasequePatternShiftKnob : ZZC_CallbackKnob {
-//   Phaseque* phaseq = nullptr;
-
-//   ZZC_PhasequePatternShiftKnob() {
-//     showDisplay = true;
-//     strokeWidth = 1.5;
-//     setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-25-Encoder.svg")));
-//     shadow->box.size = Vec(31, 31);
-//     shadow->box.pos = Vec(0, 2);
-//     shadow->blurRadius = 15.0f;
-//     shadow->opacity = 1.0f;
-//   }
-
-//   void onInput(float factor) override {
-//     if (phaseq) {
-//       phaseq->setPatternShift(factor);
-//     }
-//   }
-//   void onAbsInput(float value) override {
-//     if (phaseq) {
-//       phaseq->setPatternShift(value);
-//     }
-//   }
-//   void onReset() override {
-//     if (phaseq) {
-//       phaseq->resetPatternShift();
-//     }
-//   }
-// };
-
-struct ZZC_PhasequeMutaKnob : ZZC_CallbackKnob {
-  Phaseque* phaseq = nullptr;
-
+struct ZZC_PhasequeMutaKnob : SvgKnob {
   ZZC_PhasequeMutaKnob() {
-    showDisplay = false;
     setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-27-Encoder.svg")));
     shadow->box.size = Vec(33, 33);
     shadow->box.pos = Vec(-3, 2);
     shadow->blurRadius = 15.0f;
     shadow->opacity = 1.0f;
+    smooth = false;
   }
 
-  void onInput(float factor) override {
-    if (phaseq && factor != 0.0f) {
-      phaseq->mutate(factor);
-    }
-  }
-  void onAbsInput(float value) override {
-    if (phaseq) {
-      phaseq->scaleMutation(value);
-    }
-  }
-  void onReset() override {
-    if (phaseq) {
-      phaseq->resetMutation();
-    }
+  void onDragEnd(const event::DragEnd &e) override {
+    if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+      return;
+    APP->window->cursorUnlock();
   }
 };
 
-struct ZZC_PhasequeStepAttrKnob : ZZC_CallbackKnob {
-  Phaseque* phaseq = nullptr;
-  int item;
-  int attr;
-
-  void onInput(float factor) override {
-    if (phaseq) {
-      phaseq->setStepAttr(item, attr, factor);
-    }
-  }
-  void onAbsInput(float value) override {
-    if (phaseq) {
-      phaseq->setStepAttrAbs(item, attr, value);
-    }
-  }
-  void onReset() override {
-    if (phaseq) {
-      phaseq->resetStepAttr(item, attr);
-    }
-  }
-};
-
-struct ZZC_PhasequeStepAttrKnob23 : ZZC_PhasequeStepAttrKnob {
+struct ZZC_PhasequeStepAttrKnob23 : ZZC_DisplayKnob {
   ZZC_PhasequeStepAttrKnob23() {
-    strokeWidth = 1.5;
-    showDisplay = true;
     setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-27-23-Encoder.svg")));
     shadow->box.size = Vec(33, 33);
     shadow->box.pos = Vec(-1.5, 2);
     shadow->blurRadius = 15.0f;
     shadow->opacity = 1.0f;
+    recalcSizes();
   }
 };
 
-struct ZZC_PhasequeStepAttrKnob21 : ZZC_PhasequeStepAttrKnob {
+struct ZZC_PhasequeStepAttrKnob21 : ZZC_DisplayKnob {
   ZZC_PhasequeStepAttrKnob21() {
-    strokeWidth = 1.5;
-    showDisplay = true;
     setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-27-21-Encoder.svg")));
     shadow->box.size = Vec(29, 29);
     shadow->box.pos = Vec(-0.5, 2);
@@ -1191,10 +1181,8 @@ struct ZZC_PhasequeStepAttrKnob21 : ZZC_PhasequeStepAttrKnob {
   }
 };
 
-struct ZZC_PhasequeStepAttrKnob19 : ZZC_PhasequeStepAttrKnob {
+struct ZZC_PhasequeStepAttrKnob19 : ZZC_DisplayKnob {
   ZZC_PhasequeStepAttrKnob19() {
-    strokeWidth = 1.5;
-    showDisplay = true;
     setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-27-19-Encoder.svg")));
     shadow->box.size = Vec(25, 25);
     shadow->box.pos = Vec(0.5, 2);
@@ -1652,6 +1640,7 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
 
   addInput(createInput<ZZC_PJ_Port>(Vec(119, 319.75f), module, Phaseque::MUTA_DEC_INPUT));
 
+  addParam(createParam<ZZC_PhasequeMutaKnob>(Vec(153, 318), module, Phaseque::PATTERN_MUTA_PARAM));
   // ZZC_PhasequeMutaKnob *mutaKnob = new ZZC_PhasequeMutaKnob();
   // mutaKnob->box.pos = Vec(153, 318);
   // if (module) {
@@ -1670,19 +1659,10 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
   float stepPeriod = 35.0f;
   float stepsAreaX = 614.0;
   for (int i = 0; i < NUM_STEPS; i++) {
-    // ZZC_PhasequeStepAttrKnob23 *valueKnob = new ZZC_PhasequeStepAttrKnob23();
-    // valueKnob->box.pos = Vec(stepsAreaX + stepPeriod * i - 0.5f, 48);
-    // if (module) {
-    //   valueKnob->phaseq = module;
-    //   valueKnob->item = i;
-    //   valueKnob->attr = STEP_VALUE;
-    //   valueKnob->attachValue(&module->pattern.steps[i].attrs[STEP_VALUE].value, -2.0f, 2.0f, 0.0f);
-    //   valueKnob->paramQuantity = module->paramQuantities[Phaseque::STEP_VALUE_PARAM + i];
-    // }
-    // addChild(valueKnob);
+    addParam(createParam<ZZC_PhasequeStepAttrKnob23>(Vec(stepsAreaX + stepPeriod * i - 0.5f, 48), module, Phaseque::STEP_VALUE_PARAM + i));
 
-    // addParam(createParam<ZZC_LEDBezelDark>(Vec(stepsAreaX + 3.3f + stepPeriod * i, 82.3f), module, Phaseque::GATE_SWITCH_PARAM + i));
-    // addChild(createLight<LedLight<ZZC_YellowLight>>(Vec(stepsAreaX + 5.1f + stepPeriod * i, 84.0f), module, Phaseque::GATE_SWITCH_LED + i));
+    addParam(createParam<ZZC_LEDBezelDark>(Vec(stepsAreaX + 3.3f + stepPeriod * i, 82.3f), module, Phaseque::GATE_SWITCH_PARAM + i));
+    addChild(createLight<LedLight<ZZC_YellowLight>>(Vec(stepsAreaX + 5.1f + stepPeriod * i, 84.0f), module, Phaseque::GATE_SWITCH_LED + i));
 
     // ZZC_PhasequeStepAttrKnob21 *shiftKnob = new ZZC_PhasequeStepAttrKnob21();
     // shiftKnob->box.pos = Vec(stepsAreaX + 0.5f + stepPeriod * i, 110.5f);

@@ -3,7 +3,7 @@
 
 #include "ZZC.hpp"
 
-#define NUM_STEPS 8
+const int NUM_STEPS = 8;
 #define NUM_PATTERNS 32
 
 using namespace rack;
