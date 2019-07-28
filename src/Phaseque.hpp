@@ -250,8 +250,7 @@ struct MutableValue {
   void randomize() {
     float range = this->maxValue - this->minValue;
     this->base = this->minValue + random::uniform() * range;
-    this->clampMutation();
-    this->applyMutation();
+    this->resetMutation();
     this->isClean = false;
   }
 
@@ -359,6 +358,7 @@ struct Step {
       this->attrs[i].randomize();
     }
     this->isClean = false;
+    this->mutationStrength = 0.f;
   }
   inline float expr(float phase) {
     return curve(phase,

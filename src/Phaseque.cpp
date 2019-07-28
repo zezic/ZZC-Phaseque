@@ -817,10 +817,6 @@ struct Phaseque : Module {
   }
   void process(const ProcessArgs &args) override;
 
-  void onRandomize() override {
-    pattern.randomize();
-  }
-
   void randomizeAll() {
     storeCurrentPattern();
     for (int i = 0; i < NUM_PATTERNS + 1; i++) {
@@ -922,6 +918,11 @@ struct Phaseque : Module {
 
   void takeOutCurrentPattern() {
     pattern = patterns[patternIdx];
+    renderParamQuantities();
+    refreshPatternPointers();
+  }
+
+  void renderParamQuantities() {
     paramQuantities[PATTERN_RESO_PARAM]->setValue(pattern.resolution);
     paramQuantities[PATTERN_SHIFT_PARAM]->setValue(pattern.shift / baseStepLen);
     for (int s = 0; s < NUM_STEPS; s++) {
@@ -929,7 +930,6 @@ struct Phaseque : Module {
         paramQuantities[STEP_VALUE_PARAM + a * NUM_STEPS + s]->setValue(pattern.steps[s].attrs[a].base);
       }
     }
-    refreshPatternPointers();
   }
 
   void onReset() override {
@@ -940,6 +940,11 @@ struct Phaseque : Module {
     patternIdx = 1;
     takeOutCurrentPattern();
     polyphonyMode = MONOPHONIC;
+  }
+
+  void onRandomize() override {
+    pattern.randomize();
+    renderParamQuantities();
   }
 
   json_t *dataToJson() override {
@@ -1150,6 +1155,8 @@ struct ZZC_DisplayKnob : SvgKnob {
     }
     SvgKnob::onChange(e);
   }
+
+  void randomize() override {};
 };
 
 struct ZZC_PhasequePatternShiftKnob : ZZC_DisplayKnob {
