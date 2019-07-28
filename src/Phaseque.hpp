@@ -345,6 +345,7 @@ struct Step {
       this->attrs[i].init();
     }
     this->isClean = true;
+    this->mutationStrength = 0.f;
   }
   float minLen() {
     return std::max(minStepLen, this->attrs[STEP_LEN].value * (globalLen ? *globalLen : 1.0f));

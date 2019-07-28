@@ -30,7 +30,7 @@ struct PatternDisplayWidget : BaseDisplayWidget {
 
   NVGcolor lcdActiveMutColor = nvgRGB(0x2e, 0xc6, 0xff);
   NVGcolor lcdDimmedMutColor = nvgRGB(0x32, 0x95, 0xcc);
-  NVGcolor lcdDisabledMutColor = nvgRGB(0x41, 0x6a, 0x81);
+  NVGcolor lcdDisabledMutColor = nvgRGB(0x30, 0x4e, 0x5e);
 
   std::shared_ptr<Font> font;
 
