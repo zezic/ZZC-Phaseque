@@ -50,7 +50,6 @@ struct NegSchmittTrigger : dsp::SchmittTrigger {
   }
 };
 
-
 inline float patternToVolts(int idx) {
   return (idx - 1) * 1.0f / 12.0f;
 }
@@ -314,10 +313,18 @@ struct Phaseque : Module {
   float resolution = pattern.resolution;
   int lastGoToRequest = 0;
 
-  bool polyphonic = false;
+  int polyphonyMode = MONOPHONIC;
   bool stepsStates[NUM_STEPS] = { false };
+  bool unisonStates[NUM_STEPS] = { false };
 
   dsp::ClockDivider lightDivider;
+
+  void setPolyMode(PolyphonyModes polyMode) {
+    if (polyMode == this->polyphonyMode) {
+      return;
+    }
+    this->polyphonyMode = polyMode;
+  }
 
   void goToPattern(int targetIdx) {
     if (targetIdx < 1) { targetIdx = NUM_PATTERNS; }
@@ -659,6 +666,30 @@ struct Phaseque : Module {
     outputs[PHASE_OUTPUT].setVoltage(stepPhase * 10.0f, channel);
   }
 
+  void renderUnison(
+    Step *step, int channel,
+    Output &vOutput,
+    Output &shiftOutput,
+    Output &lenOutput,
+    Output &exprOutput,
+    Output &exprCurveOutput,
+    Output &phaseOutput
+  ) {
+    float v = step->attrs[STEP_VALUE].base;
+    float shift = step->attrs[STEP_SHIFT].base / baseStepLen;
+    float len = step->attrs[STEP_LEN].base / baseStepLen - 1.0f;
+    float stepPhase = step->phaseBase(phaseShifted);
+    float expr = step->exprBase(stepPhase);
+    float curve = step->attrs[STEP_EXPR_CURVE].base;
+
+    outputs[V_OUTPUT].setVoltage(v, channel);
+    outputs[SHIFT_OUTPUT].setVoltage(shift * 5.0f, channel);
+    outputs[LEN_OUTPUT].setVoltage(len * 5.0f, channel);
+    outputs[EXPR_OUTPUT].setVoltage(expr * 5.0f, channel);
+    outputs[EXPR_CURVE_OUTPUT].setVoltage(curve * 5.0f, channel);
+    outputs[PHASE_OUTPUT].setVoltage(stepPhase * 10.0f, channel);
+  }
+
   void processIndicators() {
     if (!lightDivider.process()) {
       return;
@@ -733,7 +764,7 @@ struct Phaseque : Module {
         return;
       Phaseque* phaseq = static_cast<Phaseque*>(module);
       value = math::clampSafe(value, getMinValue(), getMaxValue());
-      phaseq->setStepAttrAbs(item, attr, value);
+      phaseq->setStepAttrBase(item, attr, value);
       APP->engine->setParam(module, paramId, value);
     }
   };
@@ -827,6 +858,10 @@ struct Phaseque : Module {
     this->pattern.steps[stepNumber].setAttrAbs(attr, target);
   }
 
+  void setStepAttrBase(int stepNumber, int attr, float target) {
+    this->pattern.steps[stepNumber].setAttrBase(attr, target);
+  }
+
   void resetStepAttr(int stepNumber, int attr) {
     this->pattern.steps[stepNumber].resetAttr(attr);
   }
@@ -891,7 +926,7 @@ struct Phaseque : Module {
     paramQuantities[PATTERN_SHIFT_PARAM]->setValue(pattern.shift / baseStepLen);
     for (int s = 0; s < NUM_STEPS; s++) {
       for (int a = 0; a < STEP_ATTRS_TOTAL; a++) {
-        paramQuantities[STEP_VALUE_PARAM + a * NUM_STEPS + s]->setValue(pattern.steps[s].attrs[a].value);
+        paramQuantities[STEP_VALUE_PARAM + a * NUM_STEPS + s]->setValue(pattern.steps[s].attrs[a].base);
       }
     }
     refreshPatternPointers();
@@ -904,7 +939,7 @@ struct Phaseque : Module {
     }
     patternIdx = 1;
     takeOutCurrentPattern();
-    polyphonic = false;
+    polyphonyMode = MONOPHONIC;
   }
 
   json_t *dataToJson() override {
@@ -916,7 +951,7 @@ struct Phaseque : Module {
     json_object_set_new(rootJ, "globalGateInternal", json_boolean(globalGateInternal));
     json_object_set_new(rootJ, "patternIdx", json_integer(patternIdx));
     json_object_set_new(rootJ, "wait", json_boolean(wait));
-    json_object_set_new(rootJ, "polyphonic", json_boolean(polyphonic));
+    json_object_set_new(rootJ, "polyphonyMode", json_integer(polyphonyMode));
 
     json_t *patternsJ = json_array();
     for (int i = 0; i <= NUM_PATTERNS; i++) {
@@ -938,7 +973,7 @@ struct Phaseque : Module {
     json_t *globalGateInternalJ = json_object_get(rootJ, "globalGateInternal");
     json_t *patternIdxJ = json_object_get(rootJ, "patternIdx");
     json_t *waitJ = json_object_get(rootJ, "wait");
-    json_t *polyphonicJ = json_object_get(rootJ, "polyphonic");
+    json_t *polyphonyModeJ = json_object_get(rootJ, "polyphonyMode");
     if (tempoTrackJ) {
       tempoTrack = json_boolean_value(tempoTrackJ);
     }
@@ -960,8 +995,8 @@ struct Phaseque : Module {
     if (waitJ) {
       wait = json_boolean_value(waitJ);
     }
-    if (polyphonicJ) {
-      polyphonic = json_boolean_value(polyphonicJ);
+    if (polyphonyModeJ) {
+      polyphonyMode = json_integer_value(polyphonyModeJ);
     }
 
     json_t *patternsJ = json_object_get(rootJ, "patterns");
@@ -1376,13 +1411,18 @@ void Phaseque::process(const ProcessArgs &args) {
     ptrnStartPulseGenerator.trigger(1e-3f);
   }
 
-  if (polyphonic) {
+  if (polyphonyMode == POLYPHONIC) {
     activeStep = nullptr;
-    pattern.updateStepsStates(phaseShifted, globalGate, stepsStates);
+    pattern.updateStepsStates(phaseShifted, globalGate, stepsStates, false);
+  } else if (polyphonyMode == UNISON) {
+    activeStep = nullptr;
+    pattern.updateStepsStates(phaseShifted, globalGate, stepsStates, false);
+    pattern.updateStepsStates(phaseShifted, globalGate, unisonStates, true);
   } else {
     activeStep = pattern.getStepForPhase(phaseShifted, globalGate);
     for (int i = 0; i < NUM_STEPS; i++) {
       stepsStates[i] = false;
+      unisonStates[i] = false;
     }
   }
   if ((activeStep && lastActiveStep) && activeStep != lastActiveStep) {
@@ -1405,14 +1445,14 @@ void Phaseque::process(const ProcessArgs &args) {
   }
 
   retrigGap = retrigGapGenerator.process(args.sampleTime);
-  if (!polyphonic) {
+  if (polyphonyMode == MONOPHONIC) {
     if (retrigGap || !clutch) {
       outputs[GATE_OUTPUT].setVoltage(0.0f);
     } else {
       outputs[GATE_OUTPUT].setVoltage(activeStep ? 10.0f : 0.0f);
     }
   }
-  if (polyphonic) {
+  if (polyphonyMode == POLYPHONIC || polyphonyMode == UNISON) {
     for (int i = 0; i < NUM_STEPS; i++) {
       if (stepsStates[i]) {
         renderStep(
@@ -1432,14 +1472,40 @@ void Phaseque::process(const ProcessArgs &args) {
         outputs[STEP_GATE_OUTPUT + i].setVoltage(0.f);
         lights[STEP_GATE_LIGHT + i].setBrightness(0.f);
       }
+      if (polyphonyMode == UNISON && unisonStates[i]) {
+        renderUnison(
+          &pattern.steps[i], i + NUM_STEPS,
+          outputs[V_OUTPUT],
+          outputs[SHIFT_OUTPUT],
+          outputs[LEN_OUTPUT],
+          outputs[EXPR_OUTPUT],
+          outputs[EXPR_CURVE_OUTPUT],
+          outputs[PHASE_OUTPUT]
+        );
+        outputs[GATE_OUTPUT].setVoltage(10.f, i + NUM_STEPS);
+        outputs[STEP_GATE_OUTPUT + i].setVoltage(10.f);
+        lights[STEP_GATE_LIGHT + i].setBrightness(1.f);
+      } else {
+        outputs[GATE_OUTPUT].setVoltage(0.f, i + NUM_STEPS);
+      }
     }
-    outputs[GATE_OUTPUT].setChannels(NUM_STEPS);
-    outputs[V_OUTPUT].setChannels(NUM_STEPS);
-    outputs[SHIFT_OUTPUT].setChannels(NUM_STEPS);
-    outputs[LEN_OUTPUT].setChannels(NUM_STEPS);
-    outputs[EXPR_OUTPUT].setChannels(NUM_STEPS);
-    outputs[EXPR_CURVE_OUTPUT].setChannels(NUM_STEPS);
-    outputs[PHASE_OUTPUT].setChannels(NUM_STEPS);
+    if (polyphonyMode == UNISON) {
+      outputs[GATE_OUTPUT].setChannels(NUM_STEPS * 2);
+      outputs[V_OUTPUT].setChannels(NUM_STEPS * 2);
+      outputs[SHIFT_OUTPUT].setChannels(NUM_STEPS * 2);
+      outputs[LEN_OUTPUT].setChannels(NUM_STEPS * 2);
+      outputs[EXPR_OUTPUT].setChannels(NUM_STEPS * 2);
+      outputs[EXPR_CURVE_OUTPUT].setChannels(NUM_STEPS * 2);
+      outputs[PHASE_OUTPUT].setChannels(NUM_STEPS * 2);
+    } else {
+      outputs[GATE_OUTPUT].setChannels(NUM_STEPS);
+      outputs[V_OUTPUT].setChannels(NUM_STEPS);
+      outputs[SHIFT_OUTPUT].setChannels(NUM_STEPS);
+      outputs[LEN_OUTPUT].setChannels(NUM_STEPS);
+      outputs[EXPR_OUTPUT].setChannels(NUM_STEPS);
+      outputs[EXPR_CURVE_OUTPUT].setChannels(NUM_STEPS);
+      outputs[PHASE_OUTPUT].setChannels(NUM_STEPS);
+    }
 
     processIndicators();
   } else {
@@ -1587,8 +1653,9 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
     patternDisplay->activeStep = &module->activeStep;
     patternDisplay->direction = &module->direction;
     patternDisplay->globalGate = &module->globalGate;
-    patternDisplay->polyphonic = &module->polyphonic;
+    patternDisplay->polyphonyMode = &module->polyphonyMode;
     patternDisplay->stepsStates = module->stepsStates;
+    patternDisplay->unisonStates = module->unisonStates;
   }
   addChild(patternDisplay);
 
@@ -1742,13 +1809,33 @@ struct PhasequeClearPatternItem : MenuItem {
   }
 };
 
-struct PhasequePolyphonicItem : MenuItem {
-  Phaseque *phaseq;
+struct PolyModeValueItem : MenuItem {
+  Phaseque *module;
+  PolyphonyModes polyMode;
   void onAction(const event::Action &e) override {
-    phaseq->polyphonic ^= true;
+    module->setPolyMode(polyMode);
   }
-  void step() override {
-    rightText = CHECKMARK(phaseq->polyphonic);
+};
+
+struct PolyModeItem : MenuItem {
+  Phaseque *module;
+  Menu *createChildMenu() override {
+    Menu *menu = new Menu;
+    std::vector<std::string> polyModeNames = {
+      "Monophonic",
+      "Polyphonic 8",
+      "Muta-Unison 16"
+    };
+    for (int i = 0; i < NUM_POLYPHONY_MODES; i++) {
+      PolyphonyModes polyMode = (PolyphonyModes) i;
+      PolyModeValueItem *item = new PolyModeValueItem;
+      item->text = polyModeNames[i];
+      item->rightText = CHECKMARK(module->polyphonyMode == polyMode);
+      item->module = module;
+      item->polyMode = polyMode;
+      menu->addChild(item);
+    }
+    return menu;
   }
 };
 
@@ -1765,7 +1852,6 @@ void PhasequeWidget::appendContextMenu(Menu *menu) {
   PhasequeRndAllResoItem *phaseqRndAllResoItem = createMenuItem<PhasequeRndAllResoItem>("Randomize All Resolutions");
   PhasequeBakeMutationItem *phaseqBakeMutationItem = createMenuItem<PhasequeBakeMutationItem>("Bake Mutation");
   PhasequeClearPatternItem *phaseqClearPatternItem = createMenuItem<PhasequeClearPatternItem>("Clear Pattern");
-  PhasequePolyphonicItem *phaseqPolyphonicItem = createMenuItem<PhasequePolyphonicItem>("Polyphonic");
   phaseqCopyToNextItem->phaseq = phaseq;
   phaseqCopyToPrevItem->phaseq = phaseq;
   phaseqCopyResoItem->phaseq = phaseq;
@@ -1773,7 +1859,6 @@ void PhasequeWidget::appendContextMenu(Menu *menu) {
   phaseqRndAllResoItem->phaseq = phaseq;
   phaseqBakeMutationItem->phaseq = phaseq;
   phaseqClearPatternItem->phaseq = phaseq;
-  phaseqPolyphonicItem->phaseq = phaseq;
   menu->addChild(phaseqCopyToNextItem);
   menu->addChild(phaseqCopyToPrevItem);
   menu->addChild(new MenuSeparator());
@@ -1786,7 +1871,11 @@ void PhasequeWidget::appendContextMenu(Menu *menu) {
   menu->addChild(new MenuSeparator());
   menu->addChild(phaseqClearPatternItem);
   menu->addChild(new MenuSeparator());
-  menu->addChild(phaseqPolyphonicItem);
+  PolyModeItem *polyModeItem = new PolyModeItem;
+  polyModeItem->text = "Polyphony";
+  polyModeItem->rightText = RIGHT_ARROW;
+  polyModeItem->module = phaseq;
+  menu->addChild(polyModeItem);
 }
 
 Model *modelPhaseque = createModel<Phaseque, PhasequeWidget>("Phaseque");

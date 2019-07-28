@@ -8,6 +8,13 @@ const int NUM_STEPS = 8;
 
 using namespace rack;
 
+enum PolyphonyModes {
+  MONOPHONIC,
+  POLYPHONIC,
+  UNISON,
+  NUM_POLYPHONY_MODES
+};
+
 inline float crossfadePow(float base, float exp) {
   float lowExp = std::floor(exp - 1.0f);
   float low = base;
@@ -230,7 +237,10 @@ struct MutableValue {
 
   void setBase(float target) {
     this->base = target;
-    this->isClean = false;
+    if (target != this->defaultValue) {
+      this->isClean = false;
+    }
+    this->applyMutation();
   }
   void setMutation(float target) {
     this->mutation = target;
@@ -263,6 +273,7 @@ struct Step {
   int idx;
   float in_;
   bool isClean = true;
+  float mutationStrength = 0.f;
 
   MutableValue attrs[STEP_ATTRS_TOTAL];
 
@@ -298,16 +309,23 @@ struct Step {
       attrs[i].dataFromJson(attrJ);
     }
     this->updateCleanFlag();
+    this->updateMutatedFlag();
   }
 
   float out() {
     return in() + minLen();
+  }
+  float outBase() {
+    return inBase() + minLenBase();
   }
   float fastOut(float inCache, float globalLen) {
     return inCache + this->attrs[STEP_LEN].value * globalLen;
   }
   float in() {
     return in_ + attrs[STEP_SHIFT].value + (patternShift ? *patternShift : 0.0f) + (globalShift ? *globalShift : 0.0f);
+  }
+  float inBase() {
+    return in_ + attrs[STEP_SHIFT].base + (patternShift ? *patternShift : 0.0f) + (globalShift ? *globalShift : 0.0f);
   }
   float fastIn(float shift) {
     return in_ + attrs[STEP_SHIFT].value + shift;
@@ -331,6 +349,9 @@ struct Step {
   float minLen() {
     return std::max(minStepLen, this->attrs[STEP_LEN].value * (globalLen ? *globalLen : 1.0f));
   }
+  float minLenBase() {
+    return std::max(minStepLen, this->attrs[STEP_LEN].base * (globalLen ? *globalLen : 1.0f));
+  }
   void randomize() {
     this->gate = random::uniform() > 0.2f; // Because it's too boring when there is only few notes
     for (int i = 0; i < STEP_ATTRS_TOTAL; i++) {
@@ -346,12 +367,28 @@ struct Step {
       this->attrs[STEP_EXPR_OUT].value
     );
   }
+  inline float exprBase(float phase) {
+    return curve(phase,
+      clamp(this->attrs[STEP_EXPR_CURVE].base + (exprCurvePort ? exprCurvePort->getVoltage() * 0.2f : 0.0f), -1.0f, 1.0f),
+      clamp(this->attrs[STEP_EXPR_POWER].base + (exprPowerPort ? exprPowerPort->getVoltage() * 0.2f : 0.0f), -1.0f, 1.0f),
+      this->attrs[STEP_EXPR_IN].base,
+      this->attrs[STEP_EXPR_OUT].base
+    );
+  }
   float phase(float transportPhase) {
     float eucIn = fastmod(this->in(), 1.0f);
     if (transportPhase < eucIn) {
       return (transportPhase + 1.0f - eucIn) / this->minLen();
     } else {
       return (transportPhase - eucIn) / this->minLen();
+    }
+  }
+  float phaseBase(float transportPhase) {
+    float eucIn = fastmod(this->inBase(), 1.0f);
+    if (transportPhase < eucIn) {
+      return (transportPhase + 1.0f - eucIn) / this->minLenBase();
+    } else {
+      return (transportPhase - eucIn) / this->minLenBase();
     }
   }
   void quantize() {
@@ -361,26 +398,32 @@ struct Step {
     this->attrs[STEP_LEN].init();
   }
   void mutate(float factor) {
+    float mutationAcc = 0.f;
     for (int i = 0; i < STEP_ATTRS_TOTAL; i++) {
       this->attrs[i].mutate(factor);
+      mutationAcc += std::abs(this->attrs[i].mutation);
     }
+    this->mutationStrength = mutationAcc;
     if (factor > 0.0f) {
       this->isClean = false;
     } else {
       this->updateCleanFlag();
     }
+    this->updateMutatedFlag();
   }
   void scaleMutation(float factor) {
     for (int i = 0; i < STEP_ATTRS_TOTAL; i++) {
       this->attrs[i].scaleMutation(factor);
     }
     this->updateCleanFlag();
+    this->updateMutatedFlag();
   }
   void resetMutation() {
     for (int i = 0; i < STEP_ATTRS_TOTAL; i++) {
       this->attrs[i].resetMutation();
     }
     this->updateCleanFlag();
+    this->mutationStrength = 0.f;
   }
   void updateIn() {
     this->in_ = this->idx * baseStepLen;
@@ -392,6 +435,11 @@ struct Step {
   void setAttrAbs(int attr, float target) {
     this->attrs[attr].setValue(target);
     this->updateCleanFlag();
+    this->updateMutatedFlag();
+  }
+  void setAttrBase(int attr, float target) {
+    this->attrs[attr].setBase(target);
+    this->updateCleanFlag();
   }
   void updateCleanFlag() {
     for (int i = 0; i < STEP_ATTRS_TOTAL; i++) {
@@ -402,15 +450,24 @@ struct Step {
     }
     this->isClean = true;
   }
+  void updateMutatedFlag() {
+    float mutationAcc = 0.f;
+    for (int i = 0; i < STEP_ATTRS_TOTAL; i++) {
+      mutationAcc += std::abs(this->attrs[i].mutation);
+    }
+    this->mutationStrength = mutationAcc;
+  }
   void resetAttr(int attr) {
     this->attrs[attr].init();
     this->updateCleanFlag();
+    this->mutationStrength = 0.f;
   }
   void bakeMutation() {
     for (int i = 0; i < STEP_ATTRS_TOTAL; i++) {
       this->attrs[i].bakeMutation();
     }
     this->updateCleanFlag();
+    this->mutationStrength = 0.f;
   }
 };
 
@@ -555,7 +612,7 @@ struct Pattern {
     return step;
   }
 
-  void updateStepsStates(float phase, bool globalGate, bool *states) {
+  void updateStepsStates(float phase, bool globalGate, bool *states, bool unison) {
     float localShift = shift + *globalShiftPtr;
     float localLen = *globalLenPtr;
     float prePhase = phase - 1.0f;
@@ -567,8 +624,8 @@ struct Pattern {
         states[i] = false;
         continue;
       }
-      float stepIn = curStep->in_ + curStep->attrs[STEP_SHIFT].value + localShift;
-      float stepOut = stepIn + curStep->attrs[STEP_LEN].value * localLen;
+      float stepIn = curStep->in_ + (unison ? curStep->attrs[STEP_SHIFT].base : curStep->attrs[STEP_SHIFT].value) + localShift;
+      float stepOut = stepIn + (unison ? curStep->attrs[STEP_LEN].base : curStep->attrs[STEP_LEN].value) * localLen;
 
       if (stepIn <= phase && phase < stepOut) {
         states[i] = true;
