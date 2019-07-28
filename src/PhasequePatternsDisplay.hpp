@@ -13,14 +13,20 @@ struct PatternsDisplayWidget : BaseDisplayWidget {
   Pattern *currentPattern = nullptr;
   int *currentIdx = nullptr;
   NVGcolor black = nvgRGB(0x00, 0x00, 0x00);
+  NVGcolor white = nvgRGB(0xff, 0xff, 0xff);
   NVGcolor lcdActiveColor = nvgRGB(0xff, 0xd4, 0x2a);
   NVGcolor lcdDimmedColor = nvgRGB(0xa0, 0x80, 0x00);
   NVGcolor lcdDisabledColor = nvgRGB(0x36, 0x2b, 0x00);
+  NVGcolor negColor = nvgRGB(0xe7, 0x34, 0x2d);
+  NVGcolor posColor = nvgRGB(0x9c, 0xd7, 0x43);
   std::shared_ptr<Font> font;
   float patSize = 17.0f;
   float gapSize = 3.0f;
   float padding = 4.0f;
   int *goToRequest = nullptr;
+  int *patternFlashNeg = nullptr;
+  int *patternFlashPos = nullptr;
+  float flashes[NUM_PATTERNS] = { 0.f };
 
   PatternsDisplayWidget() {
     font = APP->window->loadFont(asset::plugin(pluginInstance, "res/fonts/Nunito/Nunito-Bold.ttf"));
@@ -50,6 +56,25 @@ struct PatternsDisplayWidget : BaseDisplayWidget {
       nvgFillColor(args.vg, lcdDisabledColor);
       nvgFill(args.vg);
     }
+    float flash = flashes[idx];
+    if (flash < 0.f) {
+      nvgBeginPath(args.vg);
+      nvgRoundedRect(args.vg, x, y, patSize, patSize, 1.0);
+      nvgFillColor(args.vg, negColor);
+      nvgGlobalAlpha(args.vg, -flash);
+      nvgFill(args.vg);
+      nvgGlobalAlpha(args.vg, 1.f);
+      flashes[idx] += 0.02f;
+    }
+    if (flash > 0.f) {
+      nvgBeginPath(args.vg);
+      nvgRoundedRect(args.vg, x, y, patSize, patSize, 1.0);
+      nvgFillColor(args.vg, posColor);
+      nvgGlobalAlpha(args.vg, flash);
+      nvgFill(args.vg);
+      nvgGlobalAlpha(args.vg, 1.f);
+      flashes[idx] -= 0.02f;
+    }
 
     Vec textPos = Vec(x + patSize / 2.0f, y + patSize / 2.0f + 2.5f);
     if (idx == currentIdxVal) {
@@ -62,6 +87,12 @@ struct PatternsDisplayWidget : BaseDisplayWidget {
     char string[3];
     sprintf(string, "%d", idx);
     nvgText(args.vg, textPos.x, textPos.y, string, NULL);
+    if (!isNear(flash, 0.f, 0.03f)) {
+      nvgGlobalAlpha(args.vg, std::abs(flash));
+      nvgFillColor(args.vg, white);
+      nvgText(args.vg, textPos.x, textPos.y, string, NULL);
+      nvgGlobalAlpha(args.vg, 1.f);
+    }
   }
 
   void draw(const DrawArgs &args) override {
@@ -70,6 +101,20 @@ struct PatternsDisplayWidget : BaseDisplayWidget {
     nvgFontFaceId(args.vg, font->handle);
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER);
     nvgTextLetterSpacing(args.vg, -1.0);
+    if (patternFlashNeg) {
+      int flash = *patternFlashNeg;
+      if (flash != 0) {
+        flashes[flash] = -1.f;
+        *patternFlashNeg = 0;
+      }
+    }
+    if (patternFlashPos) {
+      int flash = *patternFlashPos;
+      if (flash != 0) {
+        flashes[flash] = 1.f;
+        *patternFlashPos = 0;
+      }
+    }
     if (patterns && currentPattern && currentIdx) {
       int currentPatternGoTo = currentPattern->goTo;
       int currentIdxVal = currentIdx ? *currentIdx : 1;

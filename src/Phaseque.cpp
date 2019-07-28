@@ -107,6 +107,14 @@ struct TempoTracker {
   }
 };
 
+struct StepAttrParamQuantityBase : ParamQuantity {
+  int item;
+  int attr;
+
+  StepAttrParamQuantityBase() {
+  }
+};
+
 struct Phaseque : Module {
   enum ParamIds {
     PHASE_PARAM,
@@ -318,6 +326,9 @@ struct Phaseque : Module {
   bool unisonStates[NUM_STEPS] = { false };
 
   dsp::ClockDivider lightDivider;
+
+  int patternFlashNeg = 0;
+  int patternFlashPos = 0;
 
   void setPolyMode(PolyphonyModes polyMode) {
     if (polyMode == this->polyphonyMode) {
@@ -755,9 +766,11 @@ struct Phaseque : Module {
   };
 
   template <int ITEM, int ATTR>
-  struct StepAttrParamQuantity : ParamQuantity {
-    int item = ITEM;
-    int attr = ATTR;
+  struct StepAttrParamQuantity : StepAttrParamQuantityBase {
+    StepAttrParamQuantity() {
+      item = ITEM;
+      attr = ATTR;
+    }
 
     void setValue(float value) override {
       if (!module)
@@ -785,20 +798,21 @@ struct Phaseque : Module {
 
   Phaseque() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-    configParam(TEMPO_TRACK_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
-    configParam(BPM_PARAM, 0.0, 240.0, 120.0);
-    configParam(PHASE_PARAM, 0.0, 1.0, 0.0);
-    configParam(ABS_MODE_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
-    configParam(CLUTCH_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
-    configParam(RESET_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
-    configParam(WAIT_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
-    configParam(GLOBAL_GATE_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
-    configParam(GLOBAL_SHIFT_PARAM, -baseStepLen, baseStepLen, 0.0);
-    configParam(GLOBAL_LEN_PARAM, 0.0, 2.0, 1.0);
-    configParam(SHIFT_RIGHT_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
-    configParam(LEN_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
-    configParam(REV_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
-    configParam(FLIP_SWITCH_PARAM, 0.0f, 1.0f, 0.0f);
+    configParam(TEMPO_TRACK_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Sync inter-beat phase with clock");
+    configParam(BPM_PARAM, 0.0, 240.0, 120.0, "Inter-beat BPM override");
+    configParam(PHASE_PARAM, 0.0, 1.0, 0.0, "Manual Phase Control");
+    configParam(ABS_MODE_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Absolute Phase Input");
+    configParam(CLUTCH_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Clutch Transport with Phase");
+    configParam(RESET_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Reset Phase");
+    configParam(WAIT_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Disable CV-driven Pattern Navigation");
+    configParam(GLOBAL_GATE_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Global Gate");
+    configParam(GLOBAL_SHIFT_PARAM, -baseStepLen, baseStepLen, 0.0, "Global Pattern Shift");
+    configParam(GLOBAL_LEN_PARAM, 0.0, 2.0, 1.0, "Global Step Length Modifier");
+    configParam(SHIFT_LEFT_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Shift Pattern to the Left by 1/8");
+    configParam(SHIFT_RIGHT_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Shift Pattern to the Right by 1/8");
+    configParam(LEN_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Quantize Steps Length");
+    configParam(REV_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Reverse Pattern");
+    configParam(FLIP_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Flip Pattern");
     configParam<PatternResoParamQuantity>(PATTERN_RESO_PARAM, 1.0f, 99.0f, 8.0f, "Pattern Resolution");
     configParam<PatternShiftParamQuantity>(PATTERN_SHIFT_PARAM, -1.0f, 1.0f, 0.0f, "Pattern Shift");
     configParam<PatternMutaParamQuantity>(PATTERN_MUTA_PARAM, -INFINITY, INFINITY, 0.0f, "Pattern Mutation");
@@ -1032,6 +1046,8 @@ struct PhasequePatternResoChange : history::ModuleAction {
     if (phaseq->patternIdx == patternNum) {
       phaseq->pattern.resolution = oldValue;
       mw->module->params[paramId].value = oldValue;
+    } else {
+      phaseq->patternFlashNeg = patternNum;
     }
   }
 
@@ -1043,6 +1059,8 @@ struct PhasequePatternResoChange : history::ModuleAction {
     if (phaseq->patternIdx == patternNum) {
       phaseq->pattern.resolution = newValue;
       mw->module->params[paramId].value = newValue;
+    } else {
+      phaseq->patternFlashPos = patternNum;
     }
   }
 
@@ -1101,6 +1119,8 @@ struct PhasequePatternShiftChange : history::ModuleAction {
     if (phaseq->patternIdx == patternNum) {
       phaseq->pattern.shift = oldValue;
       mw->module->params[paramId].value = oldValue;
+    } else {
+      phaseq->patternFlashNeg = patternNum;
     }
   }
 
@@ -1112,6 +1132,8 @@ struct PhasequePatternShiftChange : history::ModuleAction {
     if (phaseq->patternIdx == patternNum) {
       phaseq->pattern.shift = newValue;
       mw->module->params[paramId].value = newValue;
+    } else {
+      phaseq->patternFlashPos = patternNum;
     }
   }
 
@@ -1210,7 +1232,122 @@ struct ZZC_PhasequeMutaKnob : SvgKnob {
   }
 };
 
-struct ZZC_PhasequeStepAttrKnob23 : ZZC_DisplayKnob {
+struct PhasequeStepAttrChange : history::ModuleAction {
+  int paramId;
+  int patternNum;
+  int step;
+  int attr;
+  float oldValue;
+  float newValue;
+
+  void undo() override {
+    app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
+    assert(mw);
+    Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
+    phaseq->patterns[patternNum].steps[step].setAttrBase(attr, oldValue);
+    if (phaseq->patternIdx == patternNum) {
+      phaseq->pattern.steps[step].setAttrBase(attr, oldValue);
+      mw->module->params[paramId].value = oldValue;
+    } else {
+      phaseq->patternFlashNeg = patternNum;
+    }
+  }
+
+  void redo() override {
+    app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
+    assert(mw);
+    Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
+    phaseq->patterns[patternNum].steps[step].setAttrBase(attr, newValue);
+    if (phaseq->patternIdx == patternNum) {
+      phaseq->pattern.steps[step].setAttrBase(attr, newValue);
+      mw->module->params[paramId].value = newValue;
+    } else {
+      phaseq->patternFlashPos = patternNum;
+    }
+  }
+
+  PhasequeStepAttrChange() {
+    name = "change step attribute";
+  }
+};
+
+struct ZZC_PhasequeAttrKnob : ZZC_DisplayKnob {
+  ZZC_PhasequeAttrKnob() {
+  }
+
+  void onDragEnd(const event::DragEnd &e) override {
+    if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+      return;
+
+    APP->window->cursorUnlock();
+
+    if (paramQuantity) {
+      float newValue = paramQuantity->getSmoothValue();
+      if (oldValue != newValue) {
+        PhasequeStepAttrChange *h = new PhasequeStepAttrChange;
+        h->moduleId = paramQuantity->module->id;
+        h->paramId = paramQuantity->paramId;
+        Phaseque* phaseq = static_cast<Phaseque*>(paramQuantity->module);
+        h->patternNum = phaseq->patternIdx;
+        h->oldValue = oldValue;
+        h->newValue = newValue;
+        StepAttrParamQuantityBase* q = static_cast<StepAttrParamQuantityBase*>(paramQuantity);
+        h->step = q->item;
+        h->name = "change step " + StepAttrNames[q->attr];
+        h->attr = q->attr;
+        APP->history->push(h);
+      }
+    }
+  }
+};
+
+struct ZZC_PhasequeXYDisplayWidget : XYDisplayWidget {
+  ZZC_PhasequeXYDisplayWidget() {
+  }
+  void onDragEnd(const event::DragEnd &e) override {
+    if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+      return;
+
+    APP->window->cursorUnlock();
+
+    if (paramQuantityX) {
+      float newValueX = paramQuantityX->getValue();
+      if (oldValueX != newValueX) {
+        PhasequeStepAttrChange *h = new PhasequeStepAttrChange;
+        h->moduleId = paramQuantityX->module->id;
+        h->paramId = paramQuantityX->paramId;
+        Phaseque* phaseq = static_cast<Phaseque*>(paramQuantityX->module);
+        h->patternNum = phaseq->patternIdx;
+        h->oldValue = oldValueX;
+        h->newValue = newValueX;
+        StepAttrParamQuantityBase* q = static_cast<StepAttrParamQuantityBase*>(paramQuantityX);
+        h->step = q->item;
+        h->name = "change step " + StepAttrNames[q->attr];
+        h->attr = q->attr;
+        APP->history->push(h);
+      }
+    }
+    if (paramQuantityY) {
+      float newValueY = paramQuantityY->getValue();
+      if (oldValueY != newValueY) {
+        PhasequeStepAttrChange *h = new PhasequeStepAttrChange;
+        h->moduleId = paramQuantityY->module->id;
+        h->paramId = paramQuantityY->paramId;
+        Phaseque* phaseq = static_cast<Phaseque*>(paramQuantityY->module);
+        h->patternNum = phaseq->patternIdx;
+        h->oldValue = oldValueY;
+        h->newValue = newValueY;
+        StepAttrParamQuantityBase* q = static_cast<StepAttrParamQuantityBase*>(paramQuantityY);
+        h->step = q->item;
+        h->name = "change step " + StepAttrNames[q->attr];
+        h->attr = q->attr;
+        APP->history->push(h);
+      }
+    }
+  }
+};
+
+struct ZZC_PhasequeStepAttrKnob23 : ZZC_PhasequeAttrKnob {
   ZZC_PhasequeStepAttrKnob23() {
     setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-27-23-Encoder.svg")));
     shadow->box.size = Vec(33, 33);
@@ -1221,7 +1358,7 @@ struct ZZC_PhasequeStepAttrKnob23 : ZZC_DisplayKnob {
   }
 };
 
-struct ZZC_PhasequeStepAttrKnob21 : ZZC_DisplayKnob {
+struct ZZC_PhasequeStepAttrKnob21 : ZZC_PhasequeAttrKnob {
   ZZC_PhasequeStepAttrKnob21() {
     setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-27-21-Encoder.svg")));
     shadow->box.size = Vec(29, 29);
@@ -1238,7 +1375,7 @@ struct ZZC_PhasequeStepAttrKnob21Uni : ZZC_PhasequeStepAttrKnob21 {
   }
 };
 
-struct ZZC_PhasequeStepAttrKnob19 : ZZC_DisplayKnob {
+struct ZZC_PhasequeStepAttrKnob19 : ZZC_PhasequeAttrKnob {
   ZZC_PhasequeStepAttrKnob19() {
     setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-27-19-Encoder.svg")));
     shadow->box.size = Vec(25, 25);
@@ -1497,13 +1634,13 @@ void Phaseque::process(const ProcessArgs &args) {
       }
     }
     if (polyphonyMode == UNISON) {
-      outputs[GATE_OUTPUT].setChannels(NUM_STEPS * 2);
-      outputs[V_OUTPUT].setChannels(NUM_STEPS * 2);
-      outputs[SHIFT_OUTPUT].setChannels(NUM_STEPS * 2);
-      outputs[LEN_OUTPUT].setChannels(NUM_STEPS * 2);
-      outputs[EXPR_OUTPUT].setChannels(NUM_STEPS * 2);
-      outputs[EXPR_CURVE_OUTPUT].setChannels(NUM_STEPS * 2);
-      outputs[PHASE_OUTPUT].setChannels(NUM_STEPS * 2);
+      outputs[GATE_OUTPUT].setChannels((int) (NUM_STEPS * 2));
+      outputs[V_OUTPUT].setChannels((int) (NUM_STEPS * 2));
+      outputs[SHIFT_OUTPUT].setChannels((int) (NUM_STEPS * 2));
+      outputs[LEN_OUTPUT].setChannels((int) (NUM_STEPS * 2));
+      outputs[EXPR_OUTPUT].setChannels((int) (NUM_STEPS * 2));
+      outputs[EXPR_CURVE_OUTPUT].setChannels((int) (NUM_STEPS * 2));
+      outputs[PHASE_OUTPUT].setChannels((int) (NUM_STEPS * 2));
     } else {
       outputs[GATE_OUTPUT].setChannels(NUM_STEPS);
       outputs[V_OUTPUT].setChannels(NUM_STEPS);
@@ -1627,6 +1764,8 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
     patternsDisplayDisplay->currentPattern = &module->pattern;
     patternsDisplayDisplay->currentIdx = &module->patternIdx;
     patternsDisplayDisplay->goToRequest = &module->goToRequest;
+    patternsDisplayDisplay->patternFlashNeg = &module->patternFlashNeg;
+    patternsDisplayDisplay->patternFlashPos = &module->patternFlashPos;
   }
   addChild(patternsDisplayDisplay);
 
@@ -1717,16 +1856,10 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
     addParam(createParam<ZZC_PhasequeStepAttrKnob21Uni>(Vec(stepsAreaX + 0.5f + stepPeriod * i, 141.5f), module, Phaseque::STEP_LEN_PARAM + i));
     addParam(createParam<ZZC_PhasequeStepAttrKnob19>(Vec(stepsAreaX + 1.5f + stepPeriod * i, 176.f), module, Phaseque::STEP_EXPR_IN_PARAM + i));
 
-    XYDisplayWidget *exprDisplay = new XYDisplayWidget();
+    ZZC_PhasequeXYDisplayWidget *exprDisplay = new ZZC_PhasequeXYDisplayWidget();
     exprDisplay->box.pos = Vec(stepsAreaX + 1.0f + stepPeriod * i, 207);
     exprDisplay->box.size = Vec(27, 27);
     if (module) {
-    //   exprDisplay->phaseq = module;
-    //   exprDisplay->item = i;
-    //   exprDisplay->attrX = STEP_EXPR_POWER;
-    //   exprDisplay->attrY = STEP_EXPR_CURVE;
-    //   exprDisplay->x = &module->pattern.steps[i].attrs[STEP_EXPR_POWER].value;
-    //   exprDisplay->y = &module->pattern.steps[i].attrs[STEP_EXPR_CURVE].value;
       exprDisplay->paramQuantityX = module->paramQuantities[Phaseque::STEP_EXPR_POWER_PARAM + i];
       exprDisplay->paramQuantityY = module->paramQuantities[Phaseque::STEP_EXPR_CURVE_PARAM + i];
     }

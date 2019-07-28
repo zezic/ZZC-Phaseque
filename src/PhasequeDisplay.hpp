@@ -117,34 +117,37 @@ struct PatternDisplayWidget : BaseDisplayWidget {
   }
 
   void drawStep(const DrawArgs &args, Step step, bool mutated) {
+    int dir = direction ? *direction : 1;
+    float radius = 2.5f;
     float workArea = area.x - 1;
     float start = padding;
     float end = padding + workArea;
     float x1 = padding + workArea * eucMod(mutated ? step.in() : step.inBase(), 1.0f);
     float x2 = padding + workArea * eucMod(mutated ? step.out() : step.outBase(), 1.0f);
+    float lineX1 = x1 + (dir == 1 ? radius * 1.8f : 0.f);
+    float lineX2 = x2 - (dir == -1 ? radius * 1.8f : 0.f);
     float y = padding + crossLine2 + -stepY * (mutated ? step.attrs[STEP_VALUE].value : step.attrs[STEP_VALUE].base);
 
     // Step
-    if (x2 >= x1) {
+    if (lineX2 >= lineX1) {
       nvgBeginPath(args.vg);
-      nvgMoveTo(args.vg, x1, y);
-      nvgLineTo(args.vg, x2, y);
+      nvgMoveTo(args.vg, lineX1, y);
+      nvgLineTo(args.vg, lineX2, y);
       nvgStroke(args.vg);
     } else {
       nvgBeginPath(args.vg);
-      nvgMoveTo(args.vg, x1, y);
+      nvgMoveTo(args.vg, lineX1, y);
       nvgLineTo(args.vg, end, y);
       nvgStroke(args.vg);
       nvgBeginPath(args.vg);
       nvgMoveTo(args.vg, start, y);
-      nvgLineTo(args.vg, x2, y);
+      nvgLineTo(args.vg, lineX2, y);
       nvgStroke(args.vg);
     }
 
     // Circle
     nvgBeginPath(args.vg);
-    int directionVal = direction ? *direction : 1;
-    nvgCircle(args.vg, directionVal == 1 ? x1 + 2 : fastmod(x2 - 2 - padding, area.x) + padding, y, 2.5f);
+    nvgCircle(args.vg, dir == 1 ? x1 + 2 : fastmod(x2 - 2 - padding, area.x) + padding, y, radius);
     nvgFill(args.vg);
 
     // Expression curve
@@ -157,19 +160,18 @@ struct PatternDisplayWidget : BaseDisplayWidget {
   void drawSteps(const DrawArgs &args) {
     nvgStrokeWidth(args.vg, 1.0f);
     nvgScissor(args.vg, padding - 1, padding - 1, area.x + 2, area.y + 2);
+    nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
 
     if (pattern && globalGate) {
       for (int i = 0; i < NUM_STEPS; i++) {
         if (!pattern->steps[i].gate ^ !*globalGate) {
           nvgStrokeColor(args.vg, lcdDisabledColor);
           nvgFillColor(args.vg, lcdDisabledColor);
-          nvgGlobalCompositeOperation(args.vg, NVG_SOURCE_OVER);
           nvgGlobalAlpha(args.vg, 1.f);
           drawStep(args, pattern->steps[i], false);
           if (pattern->steps[i].mutationStrength != 0.f) {
             nvgStrokeColor(args.vg, lcdDisabledMutColor);
             nvgFillColor(args.vg, lcdDisabledMutColor);
-            nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
             nvgGlobalAlpha(args.vg, std::min(pattern->steps[i].mutationStrength, 1.f));
             drawStep(args, pattern->steps[i], true);
           }
@@ -177,20 +179,17 @@ struct PatternDisplayWidget : BaseDisplayWidget {
         if (pattern->steps[i].gate ^ !*globalGate) {
           nvgStrokeColor(args.vg, lcdDimmedColor);
           nvgFillColor(args.vg, lcdDimmedColor);
-          nvgGlobalCompositeOperation(args.vg, NVG_SOURCE_OVER);
           nvgGlobalAlpha(args.vg, 1.f);
           drawStep(args, pattern->steps[i], false);
           if (pattern->steps[i].mutationStrength != 0.f) {
             nvgStrokeColor(args.vg, lcdDimmedMutColor);
             nvgFillColor(args.vg, lcdDimmedMutColor);
-            nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
             nvgGlobalAlpha(args.vg, std::min(pattern->steps[i].mutationStrength, 1.f));
             drawStep(args, pattern->steps[i], true);
           }
         }
         nvgStrokeColor(args.vg, lcdActiveColor);
         nvgFillColor(args.vg, lcdActiveColor);
-        nvgGlobalCompositeOperation(args.vg, NVG_SOURCE_OVER);
         nvgGlobalAlpha(args.vg, 1.f);
         if (*polyphonyMode == POLYPHONIC) {
           if (stepsStates[i]) {
@@ -198,7 +197,6 @@ struct PatternDisplayWidget : BaseDisplayWidget {
             if (pattern->steps[i].mutationStrength != 0.f) {
               nvgStrokeColor(args.vg, lcdActiveMutColor);
               nvgFillColor(args.vg, lcdActiveMutColor);
-              nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
               nvgGlobalAlpha(args.vg, std::min(pattern->steps[i].mutationStrength, 1.f));
               drawStep(args, pattern->steps[i], true);
             }
@@ -211,7 +209,6 @@ struct PatternDisplayWidget : BaseDisplayWidget {
             if (pattern->steps[i].mutationStrength != 0.f) {
               nvgStrokeColor(args.vg, lcdActiveMutColor);
               nvgFillColor(args.vg, lcdActiveMutColor);
-              nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
               nvgGlobalAlpha(args.vg, std::min(pattern->steps[i].mutationStrength, 1.f));
               drawStep(args, pattern->steps[i], true);
             }
@@ -226,7 +223,6 @@ struct PatternDisplayWidget : BaseDisplayWidget {
           if (activeStepCopy.mutationStrength != 0.f) {
             nvgStrokeColor(args.vg, lcdActiveMutColor);
             nvgFillColor(args.vg, lcdActiveMutColor);
-            nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
             nvgGlobalAlpha(args.vg, std::min(activeStepCopy.mutationStrength, 1.f));
             drawStep(args, activeStepCopy, true);
           }
@@ -235,8 +231,8 @@ struct PatternDisplayWidget : BaseDisplayWidget {
     } else {
       nvgStrokeColor(args.vg, lcdDimmedColor);
       nvgFillColor(args.vg, lcdDimmedColor);
-      nvgGlobalCompositeOperation(args.vg, NVG_SOURCE_OVER);
       nvgGlobalAlpha(args.vg, 1.f);
+      dummyPattern.init();
       for (int i = 0; i < NUM_STEPS; i++) {
         drawStep(args, dummyPattern.steps[i], false);
       }
@@ -246,6 +242,7 @@ struct PatternDisplayWidget : BaseDisplayWidget {
     }
 
     nvgResetScissor(args.vg);
+    nvgGlobalCompositeOperation(args.vg, NVG_SOURCE_OVER);
   }
 
   void draw(const DrawArgs &args) override {
