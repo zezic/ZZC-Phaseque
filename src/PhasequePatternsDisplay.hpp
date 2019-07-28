@@ -5,7 +5,7 @@
 
 #ifndef WIDGETS_H
 #define WIDGETS_H
-#include "../../ZZC/src/widgets.hpp"
+#include "../dep/ZZC/src/widgets.hpp"
 #endif
 
 struct PatternsDisplayWidget : BaseDisplayWidget {

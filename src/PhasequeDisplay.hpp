@@ -5,7 +5,7 @@
 
 #ifndef WIDGETS_H
 #define WIDGETS_H
-#include "../../ZZC/src/widgets.hpp"
+#include "../dep/ZZC/src/widgets.hpp"
 #endif
 
 struct PatternDisplayWidget : BaseDisplayWidget {
@@ -129,7 +129,7 @@ struct PatternDisplayWidget : BaseDisplayWidget {
     float y = padding + crossLine2 + -stepY * (mutated ? step.attrs[STEP_VALUE].value : step.attrs[STEP_VALUE].base);
 
     // Step
-    if (lineX2 >= lineX1) {
+    if (x2 >= x1) {
       nvgBeginPath(args.vg);
       nvgMoveTo(args.vg, lineX1, y);
       nvgLineTo(args.vg, lineX2, y);

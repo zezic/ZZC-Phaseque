@@ -2,7 +2,7 @@
 
 #ifndef WIDGETS_H
 #define WIDGETS_H
-#include "../../ZZC/src/widgets.hpp"
+#include "../dep/ZZC/src/widgets.hpp"
 #endif
 
 #include <ctime>
@@ -577,31 +577,37 @@ struct Phaseque : Module {
     if (qntTrigger.process(params[QNT_SWITCH_PARAM].getValue())) {
       lights[QNT_LED].value = 1.1f;
       pattern.quantize();
+      renderParamQuantities();
       return;
     }
     if (shiftLeftTrigger.process(params[SHIFT_LEFT_SWITCH_PARAM].getValue())) {
       lights[SHIFT_LEFT_LED].value = 1.1f;
       pattern.shiftLeft();
+      renderParamQuantities();
       return;
     }
     if (shiftRightTrigger.process(params[SHIFT_RIGHT_SWITCH_PARAM].getValue())) {
       lights[SHIFT_RIGHT_LED].value = 1.1f;
       pattern.shiftRight();
+      renderParamQuantities();
       return;
     }
     if (lenTrigger.process(params[LEN_SWITCH_PARAM].getValue())) {
       lights[LEN_LED].value = 1.1f;
       pattern.resetLenghts();
+      renderParamQuantities();
       return;
     }
     if (revTrigger.process(params[REV_SWITCH_PARAM].getValue())) {
       lights[REV_LED].value = 1.1f;
       pattern.reverse();
+      renderParamQuantities();
       return;
     }
     if (flipTrigger.process(params[FLIP_SWITCH_PARAM].getValue())) {
       lights[FLIP_LED].value = 1.1f;
       pattern.flip();
+      renderParamQuantities();
       return;
     }
   }

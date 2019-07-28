@@ -1,0 +1,3 @@
+[submodule "ZZC"]
+	path = dep/ZZC
+	url = git@github.com:zezic/ZZC.git
