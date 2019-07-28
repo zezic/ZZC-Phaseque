@@ -134,9 +134,11 @@ struct Phaseque : Module {
     PATTERN_SHIFT_PARAM,
     PATTERN_MUTA_PARAM,
     ENUMS(STEP_VALUE_PARAM, NUM_STEPS),
-    ENUMS(STEP_SHIFT_PARAM, NUM_STEPS),
     ENUMS(STEP_LEN_PARAM, NUM_STEPS),
+    ENUMS(STEP_SHIFT_PARAM, NUM_STEPS),
     ENUMS(STEP_EXPR_IN_PARAM, NUM_STEPS),
+    ENUMS(STEP_EXPR_CURVE_PARAM, NUM_STEPS),
+    ENUMS(STEP_EXPR_POWER_PARAM, NUM_STEPS),
     ENUMS(STEP_EXPR_OUT_PARAM, NUM_STEPS),
     NUM_PARAMS
   };
@@ -730,19 +732,23 @@ struct Phaseque : Module {
       if (!module)
         return;
       Phaseque* phaseq = static_cast<Phaseque*>(module);
+      value = math::clampSafe(value, getMinValue(), getMaxValue());
       phaseq->setStepAttrAbs(item, attr, value);
       APP->engine->setParam(module, paramId, value);
     }
   };
+
   template <size_t size>
   struct StepParamConfigurator {
     void operator()(Module *module) {
       module->configParam(GATE_SWITCH_PARAM + size, 0.0f, 1.0f, 0.0f, "Step Gate");
       module->configParam<StepAttrParamQuantity<size, STEP_VALUE>>(STEP_VALUE_PARAM + size, -2.0f, 2.0f, 0.0f, "Step Value");
-      // module->configParam(STEP_SHIFT_PARAM + size, -1.0f / NUM_STEPS, 1.0f / NUM_STEPS, 0.0f);
-      // module->configParam(STEP_LEN_PARAM + size, 0.0f, 1.0f / NUM_STEPS * 2.0f, 1.0f / NUM_STEPS);
-      // module->configParam(STEP_EXPR_IN_PARAM + size, -1.0f, 1.0f, 0.0f);
-      // module->configParam(STEP_EXPR_OUT_PARAM + size, -1.0f, 1.0f, 0.0f);
+      module->configParam<StepAttrParamQuantity<size, STEP_LEN>>(STEP_LEN_PARAM + size, 0.0f, 1.0f / NUM_STEPS * 2.0f, 1.0f / NUM_STEPS, "Step Length");
+      module->configParam<StepAttrParamQuantity<size, STEP_SHIFT>>(STEP_SHIFT_PARAM + size, -1.0f / NUM_STEPS, 1.0f / NUM_STEPS, 0.0f, "Step Shift");
+      module->configParam<StepAttrParamQuantity<size, STEP_EXPR_IN>>(STEP_EXPR_IN_PARAM + size, -1.0f, 1.0f, 0.0f, "Step Expression In");
+      module->configParam<StepAttrParamQuantity<size, STEP_EXPR_CURVE>>(STEP_EXPR_CURVE_PARAM + size, -1.0f, 1.0f, 0.0f, "Step Expression Curve");
+      module->configParam<StepAttrParamQuantity<size, STEP_EXPR_POWER>>(STEP_EXPR_POWER_PARAM + size, -1.0f, 1.0f, 0.0f, "Step Expression Power");
+      module->configParam<StepAttrParamQuantity<size, STEP_EXPR_OUT>>(STEP_EXPR_OUT_PARAM + size, -1.0f, 1.0f, 0.0f, "Step Expression Out");
     }
   };
 
@@ -765,10 +771,7 @@ struct Phaseque : Module {
     configParam<PatternResoParamQuantity>(PATTERN_RESO_PARAM, 1.0f, 99.0f, 8.0f, "Pattern Resolution");
     configParam<PatternShiftParamQuantity>(PATTERN_SHIFT_PARAM, -1.0f, 1.0f, 0.0f, "Pattern Shift");
     configParam<PatternMutaParamQuantity>(PATTERN_MUTA_PARAM, -INFINITY, INFINITY, 0.0f, "Pattern Mutation");
-    // Phaseque* phaseq = static_cast<Phaseque*>(this);
     ForLoop<NUM_STEPS-1>::iterate<StepParamConfigurator>(this);
-    // for (int i = 0; i < NUM_STEPS; i++) {
-    // }
     for (int i = 0; i <= NUM_PATTERNS; i++) {
       patterns[i].init();
       patterns[i].goTo = i == NUM_PATTERNS ? 1.0f : ((float) (i + 1));
@@ -886,6 +889,11 @@ struct Phaseque : Module {
     pattern = patterns[patternIdx];
     paramQuantities[PATTERN_RESO_PARAM]->setValue(pattern.resolution);
     paramQuantities[PATTERN_SHIFT_PARAM]->setValue(pattern.shift / baseStepLen);
+    for (int s = 0; s < NUM_STEPS; s++) {
+      for (int a = 0; a < STEP_ATTRS_TOTAL; a++) {
+        paramQuantities[STEP_VALUE_PARAM + a * NUM_STEPS + s]->setValue(pattern.steps[s].attrs[a].value);
+      }
+    }
     refreshPatternPointers();
   }
 
@@ -1075,6 +1083,7 @@ struct PhasequePatternShiftChange : history::ModuleAction {
 struct ZZC_DisplayKnob : SvgKnob {
   ZZC_DirectKnobDisplay *disp = nullptr;
   float strokeWidth = 1.5f;
+  bool unipolar = false;
 
   ZZC_DisplayKnob() {
     smooth = false;
@@ -1101,8 +1110,7 @@ struct ZZC_DisplayKnob : SvgKnob {
 
   void onChange(const event::Change &e) override {
     if (paramQuantity) {
-      disp->minVal = paramQuantity->getMinValue();
-      disp->maxVal = paramQuantity->getMaxValue();
+      disp->setLimits(paramQuantity->getMinValue(), paramQuantity->getMaxValue());
       disp->value = paramQuantity->getValue();
     }
     SvgKnob::onChange(e);
@@ -1178,6 +1186,13 @@ struct ZZC_PhasequeStepAttrKnob21 : ZZC_DisplayKnob {
     shadow->box.pos = Vec(-0.5, 2);
     shadow->blurRadius = 15.0f;
     shadow->opacity = 1.0f;
+    recalcSizes();
+  }
+};
+
+struct ZZC_PhasequeStepAttrKnob21Uni : ZZC_PhasequeStepAttrKnob21 {
+  ZZC_PhasequeStepAttrKnob21Uni() {
+    unipolar = true;
   }
 };
 
@@ -1188,6 +1203,8 @@ struct ZZC_PhasequeStepAttrKnob19 : ZZC_DisplayKnob {
     shadow->box.pos = Vec(0.5, 2);
     shadow->blurRadius = 15.0f;
     shadow->opacity = 1.0f;
+    recalcSizes();
+    disp->enableColor();
   }
 };
 
@@ -1660,43 +1677,11 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
   float stepsAreaX = 614.0;
   for (int i = 0; i < NUM_STEPS; i++) {
     addParam(createParam<ZZC_PhasequeStepAttrKnob23>(Vec(stepsAreaX + stepPeriod * i - 0.5f, 48), module, Phaseque::STEP_VALUE_PARAM + i));
-
     addParam(createParam<ZZC_LEDBezelDark>(Vec(stepsAreaX + 3.3f + stepPeriod * i, 82.3f), module, Phaseque::GATE_SWITCH_PARAM + i));
     addChild(createLight<LedLight<ZZC_YellowLight>>(Vec(stepsAreaX + 5.1f + stepPeriod * i, 84.0f), module, Phaseque::GATE_SWITCH_LED + i));
-
-    // ZZC_PhasequeStepAttrKnob21 *shiftKnob = new ZZC_PhasequeStepAttrKnob21();
-    // shiftKnob->box.pos = Vec(stepsAreaX + 0.5f + stepPeriod * i, 110.5f);
-    // if (module) {
-    //   shiftKnob->phaseq = module;
-    //   shiftKnob->item = i;
-    //   shiftKnob->attr = STEP_SHIFT;
-    //   shiftKnob->attachValue(&module->pattern.steps[i].attrs[STEP_SHIFT].value, -baseStepLen, baseStepLen, 0.0f);
-    //   shiftKnob->paramQuantity = module->paramQuantities[Phaseque::STEP_SHIFT_PARAM + i];
-    // }
-    // addChild(shiftKnob);
-
-    // ZZC_PhasequeStepAttrKnob21 *lenKnob = new ZZC_PhasequeStepAttrKnob21();
-    // lenKnob->box.pos = Vec(stepsAreaX + 0.5f + stepPeriod * i, 141.5f);
-    // if (module) {
-    //   lenKnob->phaseq = module;
-    //   lenKnob->item = i;
-    //   lenKnob->attr = STEP_LEN;
-    //   lenKnob->attachValue(&module->pattern.steps[i].attrs[STEP_LEN].value, 0.0f, baseStepLen * 2.0f, baseStepLen);
-    //   lenKnob->paramQuantity = module->paramQuantities[Phaseque::STEP_LEN_PARAM + i];
-    // }
-    // addChild(lenKnob);
-
-    // ZZC_PhasequeStepAttrKnob19 *exprInKnob = new ZZC_PhasequeStepAttrKnob19();
-    // exprInKnob->box.pos = Vec(stepsAreaX + 1.5f + stepPeriod * i, 176);
-    // if (module) {
-    //   exprInKnob->phaseq = module;
-    //   exprInKnob->item = i;
-    //   exprInKnob->attr = STEP_EXPR_IN;
-    //   exprInKnob->attachValue(&module->pattern.steps[i].attrs[STEP_EXPR_IN].value, -1.0f, 1.0f, 0.0f);
-    //   exprInKnob->paramQuantity = module->paramQuantities[Phaseque::STEP_EXPR_IN_PARAM + i];
-    //   exprInKnob->enableColor();
-    // }
-    // addChild(exprInKnob);
+    addParam(createParam<ZZC_PhasequeStepAttrKnob21>(Vec(stepsAreaX + 0.5f + stepPeriod * i, 110.5f), module, Phaseque::STEP_SHIFT_PARAM + i));
+    addParam(createParam<ZZC_PhasequeStepAttrKnob21Uni>(Vec(stepsAreaX + 0.5f + stepPeriod * i, 141.5f), module, Phaseque::STEP_LEN_PARAM + i));
+    addParam(createParam<ZZC_PhasequeStepAttrKnob19>(Vec(stepsAreaX + 1.5f + stepPeriod * i, 176.f), module, Phaseque::STEP_EXPR_IN_PARAM + i));
 
     // PhasequeXYDisplayWidget *exprDisplay = new PhasequeXYDisplayWidget();
     // exprDisplay->box.pos = Vec(stepsAreaX + 1.0f + stepPeriod * i, 207);
@@ -1713,17 +1698,7 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
     // exprDisplay->setupPtrs();
     // addChild(exprDisplay);
 
-    // ZZC_PhasequeStepAttrKnob19 *exprOutKnob = new ZZC_PhasequeStepAttrKnob19();
-    // exprOutKnob->box.pos = Vec(stepsAreaX + 1.5f + stepPeriod * i, 240.5f);
-    // if (module) {
-    //   exprOutKnob->phaseq = module;
-    //   exprOutKnob->item = i;
-    //   exprOutKnob->attr = STEP_EXPR_OUT;
-    //   exprOutKnob->attachValue(&module->pattern.steps[i].attrs[STEP_EXPR_OUT].value, -1.0f, 1.0f, 0.0f);
-    //   exprOutKnob->paramQuantity = module->paramQuantities[Phaseque::STEP_EXPR_OUT_PARAM + i];
-    //   exprOutKnob->enableColor();
-    // }
-    // addChild(exprOutKnob);
+    addParam(createParam<ZZC_PhasequeStepAttrKnob19>(Vec(stepsAreaX + 1.5f + stepPeriod * i, 240.5f), module, Phaseque::STEP_EXPR_OUT_PARAM + i));
 
     addInput(createInput<ZZC_PJ_Port>(Vec(stepsAreaX + 2.0f + stepPeriod * i, 271), module, Phaseque::STEP_JUMP_INPUT + i));
     addChild(createLight<SmallLight<GreenLight>>(Vec(stepsAreaX + 11.3f + stepPeriod * i, 301.5f), module, Phaseque::STEP_GATE_LIGHT + i));
