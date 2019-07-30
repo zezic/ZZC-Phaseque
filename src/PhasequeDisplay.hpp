@@ -48,7 +48,6 @@ struct PatternDisplayWidget : BaseDisplayWidget {
 
   PatternDisplayWidget() {
     font = APP->window->loadFont(asset::plugin(pluginInstance, "res/fonts/Nunito/Nunito-Black.ttf"));
-    dummyPattern = Pattern();
   }
 
   void setupSizes() {
@@ -162,7 +161,7 @@ struct PatternDisplayWidget : BaseDisplayWidget {
     nvgScissor(args.vg, padding - 1, padding - 1, area.x + 2, area.y + 2);
     nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
 
-    if (pattern && globalGate) {
+    if (pattern && globalGate && polyphonyMode && stepsStates && unisonStates) {
       for (int i = 0; i < NUM_STEPS; i++) {
         if (!pattern->steps[i].gate ^ !*globalGate) {
           nvgStrokeColor(args.vg, lcdDisabledColor);
