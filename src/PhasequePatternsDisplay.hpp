@@ -84,13 +84,12 @@ struct PatternsDisplayWidget : BaseDisplayWidget {
     } else {
       nvgFillColor(args.vg, isClean ? lcdDimmedColor : lcdActiveColor);
     }
-    char string[3];
-    sprintf(string, "%d", idx);
-    nvgText(args.vg, textPos.x, textPos.y, string, NULL);
+    std::string string = std::to_string(idx);
+    nvgText(args.vg, textPos.x, textPos.y, string.c_str(), NULL);
     if (!isNear(flash, 0.f, 0.03f)) {
       nvgGlobalAlpha(args.vg, std::abs(flash));
       nvgFillColor(args.vg, white);
-      nvgText(args.vg, textPos.x, textPos.y, string, NULL);
+      nvgText(args.vg, textPos.x, textPos.y, string.c_str(), NULL);
       nvgGlobalAlpha(args.vg, 1.f);
     }
   }
@@ -141,9 +140,9 @@ struct PatternsDisplayWidget : BaseDisplayWidget {
     float ix = clamp(floorf((x - padding) / (patSize + gapSize)), 0.0f, 7.0f);
     float iy = clamp(floorf((box.size.y - y - padding) / (patSize + gapSize)), 0.0f, 3.0f);
     float targetIdx = (fmodf(ix, 4.0f) + 1.0f) + (iy * 4.0f) + (ix >= 4.0f ? 16.0f : 0.0f);
-    if (button == GLFW_MOUSE_BUTTON_LEFT) {
+    if (button == GLFW_MOUSE_BUTTON_LEFT && goToRequest) {
       *goToRequest = (int) targetIdx;
-    } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+    } else if (button == GLFW_MOUSE_BUTTON_RIGHT && currentPattern) {
       currentPattern->goTo = targetIdx;
     }
   }
