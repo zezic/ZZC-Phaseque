@@ -4,6 +4,7 @@
 #include "ZZC.hpp"
 
 const int NUM_STEPS = 8;
+#define MAX_VOICES 16
 #define NUM_PATTERNS 32
 
 using namespace rack;

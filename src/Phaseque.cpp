@@ -292,9 +292,9 @@ struct Phaseque : Module {
   dsp::SchmittTrigger revTrigger;
   dsp::SchmittTrigger flipTrigger;
 
-  NegSchmittTrigger mutRstTrigger;
-  dsp::SchmittTrigger mutDecTrigger;
-  dsp::SchmittTrigger mutIncTrigger;
+  NegSchmittTrigger mutRstTrigger[MAX_VOICES];
+  dsp::SchmittTrigger mutDecTrigger[MAX_VOICES];
+  dsp::SchmittTrigger mutIncTrigger[MAX_VOICES];
 
   dsp::SchmittTrigger waitButtonTrigger;
   bool wait = false;
@@ -565,14 +565,38 @@ struct Phaseque : Module {
 
   inline void processPatternButtons() {
     if (inputs[MUTA_DEC_INPUT].isConnected()) {
-      if (mutRstTrigger.process(inputs[MUTA_DEC_INPUT].getVoltage())) {
-        this->resetMutation();
-      } else if (mutDecTrigger.process(inputs[MUTA_DEC_INPUT].getVoltage())) {
-        this->mutate(-0.05);
+      int mutaDecChannels = inputs[MUTA_DEC_INPUT].getChannels();
+      if (mutaDecChannels > 1) {
+        for (int i = 0; i < mutaDecChannels; i++) {
+          int targetStepIdx = i % NUM_STEPS;
+          if (mutRstTrigger[i].process(inputs[MUTA_DEC_INPUT].getVoltage(i))) {
+            this->resetStepMutation(targetStepIdx);
+          } else if (mutDecTrigger[i].process(inputs[MUTA_DEC_INPUT].getVoltage(i))) {
+            this->mutateStep(targetStepIdx, -0.05f);
+          }
+        }
+      } else {
+        if (mutRstTrigger[0].process(inputs[MUTA_DEC_INPUT].getVoltage())) {
+          this->resetMutation();
+        } else if (mutDecTrigger[0].process(inputs[MUTA_DEC_INPUT].getVoltage())) {
+          this->mutate(-0.05f);
+        }
       }
     }
-    if (inputs[MUTA_INC_INPUT].isConnected() && mutIncTrigger.process(inputs[MUTA_INC_INPUT].getVoltage())) {
-      this->mutate(0.1);
+    if (inputs[MUTA_INC_INPUT].isConnected()) {
+      int mutaIncChannels = inputs[MUTA_INC_INPUT].getChannels();
+      if (mutaIncChannels > 1) {
+        for (int i = 0; i < mutaIncChannels; i++) {
+          if (mutIncTrigger[i].process(inputs[MUTA_INC_INPUT].getVoltage(i))) {
+            int targetStepIdx = i % NUM_STEPS;
+            this->mutateStep(targetStepIdx, 0.1f);
+          }
+        }
+      } else {
+        if (mutIncTrigger[0].process(inputs[MUTA_INC_INPUT].getVoltage())) {
+          this->mutate(0.1f);
+        }
+      }
     }
     if (qntTrigger.process(params[QNT_SWITCH_PARAM].getValue())) {
       lights[QNT_LED].value = 1.1f;
@@ -856,11 +880,17 @@ struct Phaseque : Module {
   void mutate(float factor) {
     this->pattern.mutate(factor);
   }
+  void mutateStep(int stepIdx, float factor) {
+    this->pattern.steps[stepIdx].mutate(factor);
+  }
   void scaleMutation(float factor) {
     this->pattern.scaleMutation(factor);
   }
   void resetMutation() {
     this->pattern.resetMutation();
+  }
+  void resetStepMutation(int stepIdx) {
+    this->pattern.steps[stepIdx].resetMutation();
   }
   void bakeMutation() {
     this->pattern.bakeMutation();
@@ -1614,7 +1644,7 @@ void Phaseque::process(const ProcessArgs &args) {
           outputs[EXPR_CURVE_OUTPUT],
           outputs[PHASE_OUTPUT]
         );
-        outputs[GATE_OUTPUT].setVoltage(10.f, i);
+        outputs[GATE_OUTPUT].setVoltage(clutch ? 10.f : 0.f, i);
         outputs[STEP_GATE_OUTPUT + i].setVoltage(10.f);
         lights[STEP_GATE_LIGHT + i].setBrightness(1.f);
       } else {
@@ -1622,31 +1652,33 @@ void Phaseque::process(const ProcessArgs &args) {
         outputs[STEP_GATE_OUTPUT + i].setVoltage(0.f);
         lights[STEP_GATE_LIGHT + i].setBrightness(0.f);
       }
-      if (polyphonyMode == UNISON && unisonStates[i]) {
-        renderUnison(
-          &pattern.steps[i], i + NUM_STEPS,
-          outputs[V_OUTPUT],
-          outputs[SHIFT_OUTPUT],
-          outputs[LEN_OUTPUT],
-          outputs[EXPR_OUTPUT],
-          outputs[EXPR_CURVE_OUTPUT],
-          outputs[PHASE_OUTPUT]
-        );
-        outputs[GATE_OUTPUT].setVoltage(10.f, i + NUM_STEPS);
-        outputs[STEP_GATE_OUTPUT + i].setVoltage(10.f);
-        lights[STEP_GATE_LIGHT + i].setBrightness(1.f);
-      } else {
-        outputs[GATE_OUTPUT].setVoltage(0.f, i + NUM_STEPS);
+      if (polyphonyMode == UNISON) {
+        if (unisonStates[i]) {
+          renderUnison(
+            &pattern.steps[i], i + NUM_STEPS,
+            outputs[V_OUTPUT],
+            outputs[SHIFT_OUTPUT],
+            outputs[LEN_OUTPUT],
+            outputs[EXPR_OUTPUT],
+            outputs[EXPR_CURVE_OUTPUT],
+            outputs[PHASE_OUTPUT]
+          );
+          outputs[GATE_OUTPUT].setVoltage(clutch ? 10.f : 0.f, i + NUM_STEPS);
+          outputs[STEP_GATE_OUTPUT + i].setVoltage(10.f);
+          lights[STEP_GATE_LIGHT + i].setBrightness(1.f);
+        } else {
+          outputs[GATE_OUTPUT].setVoltage(0.f, i + NUM_STEPS);
+        }
       }
     }
     if (polyphonyMode == UNISON) {
-      outputs[GATE_OUTPUT].setChannels((int) (NUM_STEPS * 2));
-      outputs[V_OUTPUT].setChannels((int) (NUM_STEPS * 2));
-      outputs[SHIFT_OUTPUT].setChannels((int) (NUM_STEPS * 2));
-      outputs[LEN_OUTPUT].setChannels((int) (NUM_STEPS * 2));
-      outputs[EXPR_OUTPUT].setChannels((int) (NUM_STEPS * 2));
-      outputs[EXPR_CURVE_OUTPUT].setChannels((int) (NUM_STEPS * 2));
-      outputs[PHASE_OUTPUT].setChannels((int) (NUM_STEPS * 2));
+      outputs[GATE_OUTPUT].setChannels(NUM_STEPS * 2);
+      outputs[V_OUTPUT].setChannels(NUM_STEPS * 2);
+      outputs[SHIFT_OUTPUT].setChannels(NUM_STEPS * 2);
+      outputs[LEN_OUTPUT].setChannels(NUM_STEPS * 2);
+      outputs[EXPR_OUTPUT].setChannels(NUM_STEPS * 2);
+      outputs[EXPR_CURVE_OUTPUT].setChannels(NUM_STEPS * 2);
+      outputs[PHASE_OUTPUT].setChannels(NUM_STEPS * 2);
     } else {
       outputs[GATE_OUTPUT].setChannels(NUM_STEPS);
       outputs[V_OUTPUT].setChannels(NUM_STEPS);
