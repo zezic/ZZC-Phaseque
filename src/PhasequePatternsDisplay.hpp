@@ -1,7 +1,4 @@
-#ifndef PHASEQ_H
-#define PHASEQ_H
 #include "Phaseque.hpp"
-#endif
 
 #ifndef WIDGETS_H
 #define WIDGETS_H

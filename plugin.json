@@ -19,6 +19,12 @@
       "tags": [
         "Sequencer"
       ]
+    },
+    {
+      "slug": "Debug",
+      "name": "Debug",
+      "description": "Phaseque Debugger",
+      "tags": []
     }
   ]
 }
