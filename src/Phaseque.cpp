@@ -54,28 +54,28 @@ inline float patternToVolts(int idx) {
   return (idx - 1) * 1.0f / 12.0f;
 }
 
-inline int voltsToPattern(float volts) {
-  return 1 + (int) roundf(clamp(volts, 0.0, 3.1) * 12.0);
+inline unsigned int voltsToPattern(float volts) {
+  return clamp((int) std::floor((volts * 12.f)), 0, NUM_PATTERNS);
 }
 
 struct Limits {
-  int low;
-  int high;
+  unsigned int low;
+  unsigned int high;
 };
 
 Limits getRowLimits(int idx) {
-  int rowIdx = (idx - 1) / 4;
+  unsigned int rowIdx = (idx) / 4;
   Limits limits;
-  limits.low = rowIdx * 4 + 1;
-  limits.high = limits.low + 3;
+  limits.low = rowIdx * 4;
+  limits.high = (rowIdx + 1) * 4;
   return limits;
 }
 
 Limits getColumnLimits(int idx) {
-  int baseIdx = (idx - 1) % 4;
+  unsigned int baseIdx = idx % 4;
   Limits limits;
-  limits.low = (baseIdx + 1);
-  limits.high = (baseIdx + 1) + 7 * 4;
+  limits.low = baseIdx;
+  limits.high = baseIdx + 8 * 4;
   return limits;
 }
 
@@ -230,9 +230,9 @@ struct Phaseque : Module {
     NUM_LIGHTS
   };
 
-  Pattern patterns[NUM_PATTERNS + 1]; // Because we don't want to use pattern #0
-  int patternIdx = 1;
-  int lastPatternIdx = 1;
+  Pattern patterns[NUM_PATTERNS];
+  unsigned int patternIdx = 0;
+  unsigned int lastPatternIdx = 0;
   Pattern pattern = patterns[patternIdx];
   Step* activeStep = nullptr;
   Step* lastActiveStep = nullptr;
@@ -319,7 +319,7 @@ struct Phaseque : Module {
   bool bpmDisabled = false;
 
   float resolution = pattern.resolution;
-  int lastGoToRequest = 0;
+  unsigned int lastGoToRequest = 0;
 
   int polyphonyMode = MONOPHONIC;
   bool stepsStates[NUM_STEPS] = { false };
@@ -330,6 +330,11 @@ struct Phaseque : Module {
   int patternFlashNeg = 0;
   int patternFlashPos = 0;
 
+  /* CommunicationWithDisplays */
+
+  PatternsDisplayConsumer *patternsDisplayConsumer = nullptr;
+  PatternsDisplayProducer *patternsDisplayProducer = nullptr;
+
   void setPolyMode(PolyphonyModes polyMode) {
     if (polyMode == this->polyphonyMode) {
       return;
@@ -337,16 +342,15 @@ struct Phaseque : Module {
     this->polyphonyMode = polyMode;
   }
 
-  void goToPattern(int targetIdx) {
-    if (targetIdx < 1) { targetIdx = NUM_PATTERNS; }
-    if (targetIdx > NUM_PATTERNS) { targetIdx = 1; }
+  void goToPattern(unsigned int targetIdx) {
+    unsigned int targetIdxSafe = eucMod(targetIdx, NUM_PATTERNS);
     storeCurrentPattern();
-    patternIdx = targetIdx;
+    this->patternIdx = targetIdxSafe;
     takeOutCurrentPattern();
   }
 
   void goToFirstNonEmpty() {
-    for (int i = 1; i <= NUM_PATTERNS; i++) {
+    for (int i = 0; i < NUM_PATTERNS; i++) {
       if (patterns[i].hasCustomSteps()) {
         goToPattern(i);
         return;
@@ -368,9 +372,9 @@ struct Phaseque : Module {
 
     // Shift
     if (inputs[GLOBAL_SHIFT_INPUT].isConnected()) {
-      globalShift = params[GLOBAL_SHIFT_PARAM].getValue() + clamp(inputs[GLOBAL_SHIFT_INPUT].getVoltage() * 0.2f * baseStepLen, -baseStepLen, baseStepLen); 
+      globalShift = params[GLOBAL_SHIFT_PARAM].getValue() + clamp(inputs[GLOBAL_SHIFT_INPUT].getVoltage() * 0.2f * baseStepLen, -baseStepLen, baseStepLen);
     } else {
-      globalShift = params[GLOBAL_SHIFT_PARAM].getValue(); 
+      globalShift = params[GLOBAL_SHIFT_PARAM].getValue();
     }
 
     // Length
@@ -388,11 +392,19 @@ struct Phaseque : Module {
     if (wait) {
       lights[WAIT_LED].value = 1.1f;
     }
-    if (goToRequest != 0 && goToRequest != patternIdx) {
-      goToPattern(goToRequest);
-      goToRequest = 0;
-      return;
+    if (this->patternsDisplayProducer) {
+      if (this->patternsDisplayProducer->hasRequest) {
+        if (this->patternsDisplayProducer->goToRequest != this->patternIdx) {
+          this->goToPattern(this->patternsDisplayProducer->goToRequest);
+        }
+        this->patternsDisplayProducer->hasRequest = false;
+      }
     }
+    // if (goToRequest != 0 && goToRequest != patternIdx) {
+    //   goToPattern(goToRequest);
+    //   goToRequest = 0;
+    //   return;
+    // }
     if (wait) {
       return;
     }
@@ -405,7 +417,7 @@ struct Phaseque : Module {
     if (inputs[GOTO_INPUT].isConnected()) {
       if (goToInputTrigger.process(inputs[GOTO_INPUT].getVoltage())) {
         if (inputs[PTRN_INPUT].isConnected()) {
-          int target = voltsToPattern(inputs[PTRN_INPUT].getVoltage());
+          unsigned int target = voltsToPattern(inputs[PTRN_INPUT].getVoltage());
           if (target != patternIdx) {
             goToPattern(target);
             this->lastGoToRequest = target;
@@ -415,24 +427,22 @@ struct Phaseque : Module {
           this->goToFirstNonEmpty();
         }
       } else if (inputs[GOTO_INPUT].getVoltage() > 1.0f) {
-        int target = voltsToPattern(inputs[PTRN_INPUT].getVoltage());
+        unsigned int target = voltsToPattern(inputs[PTRN_INPUT].getVoltage());
         if (target != this->lastGoToRequest && target != this->patternIdx) {
           this->goToPattern(target);
           this->lastGoToRequest = target;
           return;
         }
-      } else {
-        this->lastGoToRequest = 0;
       }
     }
     if (inputs[PREV_INPUT].isConnected() && prevPtrnInputTrigger.process(inputs[PREV_INPUT].getVoltage())) {
-      for (int i = patternIdx - 1; i >= 1; i--) {
+      for (int i = this->patternIdx - 1; i >= 0; i--) {
         if (patterns[i].hasCustomSteps()) {
           goToPattern(i);
           return;
         }
       }
-      for (int i = NUM_PATTERNS; i > patternIdx; i--) {
+      for (unsigned int i = NUM_PATTERNS - 1; i > patternIdx; i--) {
         if (patterns[i].hasCustomSteps()) {
           goToPattern(i);
           return;
@@ -440,13 +450,13 @@ struct Phaseque : Module {
       }
     }
     if (inputs[NEXT_INPUT].isConnected() && nextPtrnInputTrigger.process(inputs[NEXT_INPUT].getVoltage())) {
-      for (int i = patternIdx + 1; i <= NUM_PATTERNS; i++) {
+      for (unsigned int i = this->patternIdx + 1; i < NUM_PATTERNS; i++) {
         if (patterns[i].hasCustomSteps()) {
           goToPattern(i);
           return;
         }
       }
-      for (int i = 1; i < patternIdx; i++) {
+      for (unsigned int i = 0; i < this->patternIdx; i++) {
         if (patterns[i].hasCustomSteps()) {
           goToPattern(i);
           return;
@@ -454,29 +464,29 @@ struct Phaseque : Module {
       }
     }
     if (inputs[RND_INPUT].isConnected() && firstInputTrigger.process(inputs[RND_INPUT].getVoltage())) {
-      int nonEmpty[NUM_PATTERNS];
-      int idx = 0;
-      for (int i = 1; i <= NUM_PATTERNS; i++) {
-        if (i != patternIdx && patterns[i].hasCustomSteps()) {
+      unsigned int nonEmpty[NUM_PATTERNS];
+      unsigned int idx = 0;
+      for (unsigned int i = 0; i < NUM_PATTERNS; i++) {
+        if (i != this->patternIdx && patterns[i].hasCustomSteps()) {
           nonEmpty[idx] = i;
           idx++;
         }
       }
       if (idx != 0) {
-        int randIdx = (int) (random::uniform() * idx);
+        unsigned int randIdx = clamp((unsigned int) (random::uniform() * idx), 0, idx);
         goToPattern(nonEmpty[randIdx]);
         return;
       }
     }
     if (inputs[LEFT_INPUT].isConnected() && leftInputTrigger.process(inputs[LEFT_INPUT].getVoltage())) {
-      Limits limits = getRowLimits(patternIdx);
-      for (int i = patternIdx - 1; i >= limits.low; i--) {
+      Limits limits = getRowLimits(this->patternIdx);
+      for (unsigned int i = patternIdx - 1; i >= limits.low; i--) {
         if (patterns[i].hasCustomSteps()) {
           goToPattern(i);
           return;
         }
       }
-      for (int i = limits.high; i > patternIdx; i--) {
+      for (unsigned int i = limits.high - 1; i > patternIdx; i--) {
         if (patterns[i].hasCustomSteps()) {
           goToPattern(i);
           return;
@@ -484,14 +494,14 @@ struct Phaseque : Module {
       }
     }
     if (inputs[RIGHT_INPUT].isConnected() && rightInputTrigger.process(inputs[RIGHT_INPUT].getVoltage())) {
-      Limits limits = getRowLimits(patternIdx);
-      for (int i = patternIdx + 1; i <= limits.high; i++) {
+      Limits limits = getRowLimits(this->patternIdx);
+      for (unsigned int i = patternIdx + 1; i < limits.high; i++) {
         if (patterns[i].hasCustomSteps()) {
           goToPattern(i);
           return;
         }
       }
-      for (int i = limits.low; i < patternIdx; i++) {
+      for (unsigned int i = limits.low; i < this->patternIdx; i++) {
         if (patterns[i].hasCustomSteps()) {
           goToPattern(i);
           return;
@@ -500,13 +510,13 @@ struct Phaseque : Module {
     }
     if (inputs[DOWN_INPUT].isConnected() && downInputTrigger.process(inputs[DOWN_INPUT].getVoltage())) {
       Limits limits = getColumnLimits(patternIdx);
-      for (int i = patternIdx - 4; i >= limits.low; i -= 4) {
+      for (int i = limits.high - 4; i > (int) this->patternIdx; i -= 4) {
         if (patterns[i].hasCustomSteps()) {
           goToPattern(i);
           return;
         }
       }
-      for (int i = limits.high; i > patternIdx; i -= 4) {
+      for (int i = patternIdx - 4; i >= (int) limits.low; i -= 4) {
         if (patterns[i].hasCustomSteps()) {
           goToPattern(i);
           return;
@@ -515,13 +525,13 @@ struct Phaseque : Module {
     }
     if (inputs[UP_INPUT].isConnected() && upInputTrigger.process(inputs[UP_INPUT].getVoltage())) {
       Limits limits = getColumnLimits(patternIdx);
-      for (int i = patternIdx + 4; i <= limits.high; i += 4) {
+      for (int i = patternIdx + 4; i <= (int) limits.high; i += 4) {
         if (patterns[i].hasCustomSteps()) {
           goToPattern(i);
           return;
         }
       }
-      for (int i = limits.low; i < patternIdx; i += 4) {
+      for (unsigned int i = limits.low; i < patternIdx; i += 4) {
         if (patterns[i].hasCustomSteps()) {
           goToPattern(i);
           return;
@@ -847,11 +857,11 @@ struct Phaseque : Module {
     configParam<PatternShiftParamQuantity>(PATTERN_SHIFT_PARAM, -1.0f, 1.0f, 0.0f, "Pattern Shift");
     configParam<PatternMutaParamQuantity>(PATTERN_MUTA_PARAM, -INFINITY, INFINITY, 0.0f, "Pattern Mutation");
     ForLoop<NUM_STEPS-1>::iterate<StepParamConfigurator>(this);
-    for (int i = 0; i <= NUM_PATTERNS; i++) {
+    for (int i = 0; i < NUM_PATTERNS; i++) {
       patterns[i].init();
-      patterns[i].goTo = i == NUM_PATTERNS ? 1.0f : ((float) (i + 1));
+      patterns[i].goTo = eucMod(i + 1, NUM_PATTERNS);
     }
-    patternIdx = 1;
+    this->patternIdx = 0;
     takeOutCurrentPattern();
     this->refreshPatternPointers();
     lights[TEMPO_TRACK_LED].value = tempoTrack ? 1.0f : 0.0f;
@@ -863,7 +873,7 @@ struct Phaseque : Module {
 
   void randomizeAll() {
     storeCurrentPattern();
-    for (int i = 0; i < NUM_PATTERNS + 1; i++) {
+    for (int i = 0; i < NUM_PATTERNS; i++) {
       patterns[i].randomize();
     }
     takeOutCurrentPattern();
@@ -871,7 +881,7 @@ struct Phaseque : Module {
 
   void randomizeAllReso() {
     storeCurrentPattern();
-    for (int i = 0; i < NUM_PATTERNS + 1; i++) {
+    for (int i = 0; i < NUM_PATTERNS; i++) {
       patterns[i].randomizeReso();
     }
     takeOutCurrentPattern();
@@ -930,8 +940,7 @@ struct Phaseque : Module {
   }
 
   void copyToNext() {
-    int target = patternIdx + 1;
-    if (target > NUM_PATTERNS) { target = 1; }
+    int target = eucMod(this->patternIdx + 1, NUM_PATTERNS);
     for (int i = 0; i < NUM_STEPS; i++) {
       patterns[target].steps[i] = pattern.steps[i];
     }
@@ -939,8 +948,7 @@ struct Phaseque : Module {
   }
 
   void copyToPrev() {
-    int target = patternIdx - 1;
-    if (target < 1) { target = NUM_PATTERNS; }
+    int target = eucMod(((int) this->patternIdx) - 1, NUM_PATTERNS);
     for (int i = 0; i < NUM_STEPS; i++) {
       patterns[target].steps[i] = pattern.steps[i];
     }
@@ -948,7 +956,7 @@ struct Phaseque : Module {
   }
 
   void copyResoToAll() {
-    for (int i = 0; i < NUM_PATTERNS + 1; i++) {
+    for (int i = 0; i < NUM_PATTERNS; i++) {
       patterns[i].resolution = pattern.resolution;
     }
   }
@@ -983,11 +991,11 @@ struct Phaseque : Module {
   }
 
   void onReset() override {
-    for (int i = 0; i <= NUM_PATTERNS; i++) {
+    for (int i = 0; i < NUM_PATTERNS; i++) {
       patterns[i].init();
-      patterns[i].goTo = i == NUM_PATTERNS ? 1.0f : ((float) (i + 1));
+      patterns[i].goTo = eucMod(i + 1, NUM_PATTERNS);
     }
-    patternIdx = 1;
+    patternIdx = 0;
     takeOutCurrentPattern();
     polyphonyMode = MONOPHONIC;
   }
@@ -1009,7 +1017,7 @@ struct Phaseque : Module {
     json_object_set_new(rootJ, "polyphonyMode", json_integer(polyphonyMode));
 
     json_t *patternsJ = json_array();
-    for (int i = 0; i <= NUM_PATTERNS; i++) {
+    for (int i = 0; i < NUM_PATTERNS; i++) {
       if (patterns[i].isClean()) {
         json_array_append_new(patternsJ, json_null());
       } else {
@@ -1056,10 +1064,12 @@ struct Phaseque : Module {
 
     json_t *patternsJ = json_object_get(rootJ, "patterns");
     if (patternsJ) {
-      for (unsigned int i = 0; i < json_array_size(patternsJ) && i <= NUM_PATTERNS; i++) {
+      size_t arraySize = json_array_size(patternsJ);
+      int offset = arraySize - NUM_PATTERNS;
+      for (unsigned int i = offset; i < arraySize && (i - offset) < NUM_PATTERNS; i++) {
         json_t *patternJ = json_array_get(patternsJ, i);
         if (!json_is_null(patternJ)) {
-          patterns[i].dataFromJson(patternJ);
+          patterns[i - offset].dataFromJson(patternJ);
         }
       }
     }
@@ -1070,7 +1080,7 @@ struct Phaseque : Module {
 
 struct PhasequePatternResoChange : history::ModuleAction {
   int paramId;
-  int patternNum;
+  unsigned int patternNum;
   float oldValue;
   float newValue;
 
@@ -1143,7 +1153,7 @@ struct ZZC_PhasequePatternResoKnob : SvgKnob {
 
 struct PhasequePatternShiftChange : history::ModuleAction {
   int paramId;
-  int patternNum;
+  unsigned int patternNum;
   float oldValue;
   float newValue;
 
@@ -1270,7 +1280,7 @@ struct ZZC_PhasequeMutaKnob : SvgKnob {
 
 struct PhasequeStepAttrChange : history::ModuleAction {
   int paramId;
-  int patternNum;
+  unsigned int patternNum;
   int step;
   int attr;
   float oldValue;
@@ -1738,10 +1748,15 @@ void Phaseque::process(const ProcessArgs &args) {
   lastPhaseShifted = phaseShifted;
   lastPhaseParamInput = params[PHASE_PARAM].getValue();
   lastClockInputState = inputs[CLOCK_INPUT].isConnected();
+
+  if (this->patternsDisplayConsumer) {
+    this->patternsDisplayConsumer->currentPattern = this->patternIdx;
+  }
 }
 
 struct PhasequeWidget : ModuleWidget {
   PhasequeWidget(Phaseque *module);
+  ~PhasequeWidget();
   void appendContextMenu(Menu *menu) override;
 };
 
@@ -1798,12 +1813,16 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
   patternsDisplayDisplay->box.pos = Vec(84.0f, 117.0f);
   patternsDisplayDisplay->box.size = Vec(165.0f, 85.0f);
   if (module) {
-    patternsDisplayDisplay->patterns = module->patterns;
-    patternsDisplayDisplay->currentPattern = &module->pattern;
-    patternsDisplayDisplay->currentIdx = &module->patternIdx;
-    patternsDisplayDisplay->goToRequest = &module->goToRequest;
-    patternsDisplayDisplay->patternFlashNeg = &module->patternFlashNeg;
-    patternsDisplayDisplay->patternFlashPos = &module->patternFlashPos;
+    Phaseque *phaseque = dynamic_cast<Phaseque*>(module);
+    assert(phaseque);
+    phaseque->patternsDisplayConsumer = &patternsDisplayDisplay->consumer;
+    phaseque->patternsDisplayProducer = &patternsDisplayDisplay->producer;
+    // patternsDisplayDisplay->patterns = module->patterns;
+    // patternsDisplayDisplay->currentPattern = &module->pattern;
+    // patternsDisplayDisplay->currentIdx = &module->patternIdx;
+    // patternsDisplayDisplay->goToRequest = &module->goToRequest;
+    // patternsDisplayDisplay->patternFlashNeg = &module->patternFlashNeg;
+    // patternsDisplayDisplay->patternFlashPos = &module->patternFlashPos;
   }
   addChild(patternsDisplayDisplay);
 
@@ -1936,6 +1955,15 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
   addChild(createWidget<ZZC_Screw>(Vec(box.size.x - 2 * RACK_GRID_WIDTH, 0)));
   addChild(createWidget<ZZC_Screw>(Vec(RACK_GRID_WIDTH, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));
   addChild(createWidget<ZZC_Screw>(Vec(box.size.x - 2 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));
+}
+
+PhasequeWidget::~PhasequeWidget() {
+	if (this->module) {
+    Phaseque *phaseque = dynamic_cast<Phaseque*>(this->module);
+    assert(phaseque);
+    phaseque->patternsDisplayConsumer = nullptr;
+    phaseque->patternsDisplayProducer = nullptr;
+	}
 }
 
 struct PhasequeCopyToNextItem : MenuItem {

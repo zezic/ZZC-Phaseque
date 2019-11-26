@@ -485,7 +485,7 @@ struct Step {
 
 struct Pattern {
   float resolution = 8.0f;
-  float goTo = 1.0f;
+  unsigned int goTo = 0;
   float shift = 0.0f;
   Step steps[NUM_STEPS];
   float *globalShiftPtr = nullptr;
@@ -541,8 +541,8 @@ struct Pattern {
     refreshPointers(nullptr, nullptr, nullptr, nullptr);
   }
   void init() {
-    resolution = 8.0f;
-    shift = 0.0f;
+    this->resolution = 8.0f;
+    this->shift = 0.0f;
     for (int i = 0; i < NUM_STEPS; i++) {
       this->steps[i].init(i);
     }
