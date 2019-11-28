@@ -1,5 +1,3 @@
-#include "ZZC.hpp"
-
 #ifndef WIDGETS_H
 #define WIDGETS_H
 #include "../ZZC/src/widgets.hpp"
@@ -7,96 +5,9 @@
 
 #include <ctime>
 
-#ifndef PHASEQ_H
-#define PHASEQ_H
+#include "ZZC.hpp"
 #include "Phaseque.hpp"
-#endif
-
-#include "PhasequeDisplay.hpp"
-#include "PhasequePatternsDisplay.hpp"
-
-template<size_t c>
-struct ForLoop {
-  template<template <size_t> class Func>
-  static void iterate(Module *module) {
-    Func<c>()(module);
-    if (c > 0) {}
-    ForLoop<c-1>::template iterate<Func>(module);
-  }
-};
-
-template<>
-struct ForLoop<0> {
-  template<template <size_t> class Func>
-  static void iterate(Module *module) {
-    Func<0>()(module);
-  }
-};
-
-inline float patternToVolts(int idx) {
-  return (idx - 1) * 1.0f / 12.0f;
-}
-
-inline unsigned int voltsToPattern(float volts) {
-  return clamp((int) std::floor((volts * 12.f)), 0, NUM_PATTERNS);
-}
-
-struct Limits {
-  unsigned int low;
-  unsigned int high;
-};
-
-Limits getRowLimits(int idx) {
-  unsigned int rowIdx = (idx) / 4;
-  Limits limits;
-  limits.low = rowIdx * 4;
-  limits.high = (rowIdx + 1) * 4;
-  return limits;
-}
-
-Limits getColumnLimits(int idx) {
-  unsigned int baseIdx = idx % 4;
-  Limits limits;
-  limits.low = baseIdx;
-  limits.high = baseIdx + 8 * 4;
-  return limits;
-}
-
-struct TempoTracker {
-  int ticksTracked = 0;
-  float delta = 0.0f;
-  bool detected = false;
-  float bps = 0.0f;
-
-  void reset() {
-    ticksTracked = 0;
-    delta = 0.0f;
-    detected = false;
-    bps = 0.0f;
-  }
-
-  void tick(float sampleTime) {
-    delta += sampleTime;
-    ticksTracked++;
-    if (ticksTracked > 1) {
-      detected = true;
-      bps = 1.0f / delta;
-    }
-    delta = 0.0f;
-  }
-
-  void acc(float sampleTime) {
-    delta += sampleTime;
-  }
-};
-
-struct StepAttrParamQuantityBase : ParamQuantity {
-  int item;
-  int attr;
-
-  StepAttrParamQuantityBase() {
-  }
-};
+#include "helpers.hpp"
 
 struct PhasequePatternResoChange : history::ModuleAction {
   int paramId;
@@ -839,7 +750,7 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
   addOutput(createOutput<ZZC_PJ_Port>(Vec(14, 174), module, Phaseque::WENT_OUTPUT));
   addOutput(createOutput<ZZC_PJ_Port>(Vec(49, 174), module, Phaseque::PTRN_OUTPUT));
 
-  PatternsDisplayWidget *patternsDisplayDisplay = new PatternsDisplayWidget();
+  GridDisplayWidget *patternsDisplayDisplay = new GridDisplayWidget();
   patternsDisplayDisplay->box.pos = Vec(84.0f, 117.0f);
   patternsDisplayDisplay->setupSize(Vec(165.0f, 85.0f));
   if (module) {
@@ -869,7 +780,7 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
   addParam(createParam<ZZC_LEDBezelDark>(Vec(295.3f, 221.3f), module, Phaseque::WAIT_SWITCH_PARAM));
   addChild(createLight<LedLight<ZZC_RedLight>>(Vec(297.1f, 223.0f), module, Phaseque::WAIT_LED));
 
-  PatternDisplayWidget *patternDisplay = new PatternDisplayWidget();
+  MainDisplayWidget *patternDisplay = new MainDisplayWidget();
   patternDisplay->box.pos = Vec(333.0f, 50.0f);
   patternDisplay->box.size = Vec(233.0f, 233.0f);
   patternDisplay->setupSizes();

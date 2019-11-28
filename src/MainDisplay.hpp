@@ -1,14 +1,12 @@
-#ifndef PHASEQ_H
-#define PHASEQ_H
+#pragma once
 #include "Phaseque.hpp"
-#endif
 
 #ifndef WIDGETS_H
 #define WIDGETS_H
 #include "../ZZC/src/widgets.hpp"
 #endif
 
-struct PatternDisplayConsumer {
+struct MainDisplayConsumer {
   float resolution = 8.f;
   float phase = 0.f;
   int direction = 1;
@@ -22,12 +20,12 @@ struct PatternDisplayConsumer {
   // bool *stepsStates = nullptr;
   // bool *unisonStates = nullptr;
 
-  // PatternDisplayConsumer() {
+  // MainDisplayConsumer() {
   //   this->pattern.init();
   // }
 };
 
-struct PatternDisplayWidget : BaseDisplayWidget {
+struct MainDisplayWidget : BaseDisplayWidget {
   NVGcolor lcdGhostColor = nvgRGB(0x1e, 0x1f, 0x1d);
 
   NVGcolor lcdActiveColor = nvgRGB(0xff, 0xd4, 0x2a);
@@ -40,7 +38,7 @@ struct PatternDisplayWidget : BaseDisplayWidget {
 
   std::shared_ptr<Font> font;
 
-  std::shared_ptr<PatternDisplayConsumer> consumer;
+  std::shared_ptr<MainDisplayConsumer> consumer;
 
   float padding = 6.0f;
   Vec area;
@@ -54,9 +52,9 @@ struct PatternDisplayWidget : BaseDisplayWidget {
   float stepY;
   bool ready = false;
 
-  PatternDisplayWidget() {
+  MainDisplayWidget() {
     font = APP->window->loadFont(asset::plugin(pluginInstance, "res/fonts/Nunito/Nunito-Black.ttf"));
-    consumer = std::make_shared<PatternDisplayConsumer>();
+    consumer = std::make_shared<MainDisplayConsumer>();
   }
 
   void setupSizes() {

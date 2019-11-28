@@ -1,12 +1,22 @@
+#pragma once
 #include "rack0.hpp"
 #include <algorithm> // for std:rotate
 
 #include "ZZC.hpp"
+#include "Pattern.hpp"
+#include "helpers.hpp"
+#include "MainDisplay.hpp"
+#include "GridDisplay.hpp"
 
 #define MAX_VOICES 16
 #define NUM_PATTERNS 32
 
 using namespace rack;
+
+struct StepAttrParamQuantityBase : ParamQuantity {
+  int item;
+  int attr;
+};
 
 enum PolyphonyModes {
   MONOPHONIC,
@@ -232,10 +242,10 @@ struct Phaseque : Module {
 
   /* CommunicationWithDisplays */
 
-  std::shared_ptr<PatternsDisplayConsumer> patternsDisplayConsumer;
-  std::shared_ptr<PatternsDisplayProducer> patternsDisplayProducer;
+  std::shared_ptr<GridDisplayConsumer> patternsDisplayConsumer;
+  std::shared_ptr<GridDisplayProducer> patternsDisplayProducer;
 
-  std::shared_ptr<PatternDisplayConsumer> patternDisplayConsumer;
+  std::shared_ptr<MainDisplayConsumer> patternDisplayConsumer;
 
   void setPolyMode(PolyphonyModes polyMode) {
     if (polyMode == this->polyphonyMode) {

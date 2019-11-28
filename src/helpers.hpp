@@ -1,4 +1,34 @@
+#pragma once
 #include "ZZC.hpp"
+#include "Phaseque.hpp"
+
+#define NUM_PATTERNS 32
+
+template<size_t c>
+struct ForLoop {
+  template<template <size_t> class Func>
+  static void iterate(Module *module) {
+    Func<c>()(module);
+    if (c > 0) {}
+    ForLoop<c-1>::template iterate<Func>(module);
+  }
+};
+
+template<>
+struct ForLoop<0> {
+  template<template <size_t> class Func>
+  static void iterate(Module *module) {
+    Func<0>()(module);
+  }
+};
+
+float patternToVolts(int idx) {
+  return (idx - 1) * 1.0f / 12.0f;
+}
+
+unsigned int voltsToPattern(float volts) {
+  return clamp((int) std::floor((volts * 12.f)), 0, NUM_PATTERNS);
+}
 
 struct NegSchmittTrigger : dsp::SchmittTrigger {
   bool process(float in) {
@@ -38,6 +68,55 @@ struct ChangeTrigger {
 		return triggered;
 	}
 };
+
+struct TempoTracker {
+  int ticksTracked = 0;
+  float delta = 0.0f;
+  bool detected = false;
+  float bps = 0.0f;
+
+  void reset() {
+    ticksTracked = 0;
+    delta = 0.0f;
+    detected = false;
+    bps = 0.0f;
+  }
+
+  void tick(float sampleTime) {
+    delta += sampleTime;
+    ticksTracked++;
+    if (ticksTracked > 1) {
+      detected = true;
+      bps = 1.0f / delta;
+    }
+    delta = 0.0f;
+  }
+
+  void acc(float sampleTime) {
+    delta += sampleTime;
+  }
+};
+
+struct Limits {
+  unsigned int low;
+  unsigned int high;
+};
+
+Limits getRowLimits(int idx) {
+  unsigned int rowIdx = (idx) / 4;
+  Limits limits;
+  limits.low = rowIdx * 4;
+  limits.high = (rowIdx + 1) * 4;
+  return limits;
+}
+
+Limits getColumnLimits(int idx) {
+  unsigned int baseIdx = idx % 4;
+  Limits limits;
+  limits.low = baseIdx;
+  limits.high = baseIdx + 8 * 4;
+  return limits;
+}
 
 inline float crossfadePow(float base, float exp) {
   float lowExp = std::floor(exp - 1.0f);

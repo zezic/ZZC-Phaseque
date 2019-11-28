@@ -1,23 +1,21 @@
+#pragma once
 #include <bitset>
 
-#ifndef PHASEQ_H
-#define PHASEQ_H
 #include "Phaseque.hpp"
-#endif
 
 #ifndef WIDGETS_H
 #define WIDGETS_H
 #include "../ZZC/src/widgets.hpp"
 #endif
 
-struct PatternsDisplayConsumer {
+struct GridDisplayConsumer {
   unsigned int currentPattern = 0;
   unsigned int currentPatternGoTo = 1;
   std::bitset<NUM_PATTERNS> dirtyMask;
   bool consumed = false;
 };
 
-struct PatternsDisplayProducer {
+struct GridDisplayProducer {
   unsigned int goToRequest = 0;
   bool hasGoToRequest = false;
 
@@ -25,7 +23,7 @@ struct PatternsDisplayProducer {
   bool hasNextPatternRequest = false;
 };
 
-struct PatternsDisplay : BaseDisplayWidget {
+struct GridDisplay : BaseDisplayWidget {
   NVGcolor black = nvgRGB(0x00, 0x00, 0x00);
   NVGcolor white = nvgRGB(0xff, 0xff, 0xff);
   NVGcolor lcdActiveColor = nvgRGB(0xff, 0xd4, 0x2a);
@@ -39,9 +37,9 @@ struct PatternsDisplay : BaseDisplayWidget {
   float padding = 4.0f;
   float flashes[NUM_PATTERNS] = { 0.f };
 
-  std::shared_ptr<PatternsDisplayConsumer> consumer;
+  std::shared_ptr<GridDisplayConsumer> consumer;
 
-  PatternsDisplay() {
+  GridDisplay() {
     font = APP->window->loadFont(asset::plugin(pluginInstance, "res/fonts/Nunito/Nunito-Bold.ttf"));
   }
 
@@ -94,25 +92,25 @@ struct PatternsDisplay : BaseDisplayWidget {
   }
 };
 
-struct PatternsDisplayWidget : widget::OpaqueWidget {
+struct GridDisplayWidget : widget::OpaqueWidget {
   float patSize = 17.0f;
   float gapSize = 3.0f;
   float padding = 4.0f;
 
-  std::shared_ptr<PatternsDisplayConsumer> consumer;
-  std::shared_ptr<PatternsDisplayProducer> producer;
+  std::shared_ptr<GridDisplayConsumer> consumer;
+  std::shared_ptr<GridDisplayProducer> producer;
 
 	widget::FramebufferWidget* fb;
-  PatternsDisplay* pd;
+  GridDisplay* pd;
 
-  PatternsDisplayWidget() {
-    consumer = std::make_shared<PatternsDisplayConsumer>();
-    producer = std::make_shared<PatternsDisplayProducer>();
+  GridDisplayWidget() {
+    consumer = std::make_shared<GridDisplayConsumer>();
+    producer = std::make_shared<GridDisplayProducer>();
 
     this->fb = new widget::FramebufferWidget;
     this->addChild(this->fb);
 
-    this->pd = new PatternsDisplay;
+    this->pd = new GridDisplay;
     this->pd->consumer = this->consumer;
     this->fb->addChild(this->pd);
   }
