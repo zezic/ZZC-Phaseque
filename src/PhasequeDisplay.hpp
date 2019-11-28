@@ -8,20 +8,26 @@
 #include "../ZZC/src/widgets.hpp"
 #endif
 
-struct PatternDisplayWidget : BaseDisplayWidget {
-  Pattern *pattern = nullptr;
-  Step **activeStep = nullptr;
-  float *resolution = nullptr;
-  float *phase = nullptr;
-  int *direction = nullptr;
-  float *globalValueInput = nullptr;
-  float *globalValueParam = nullptr;
-  bool *globalGate = nullptr;
-  Pattern dummyPattern;
-  int *polyphonyMode = nullptr;
-  bool *stepsStates = nullptr;
-  bool *unisonStates = nullptr;
+struct PatternDisplayConsumer {
+  float resolution = 8.f;
+  float phase = 0.f;
+  int direction = 1;
+  bool consumed = false;
+  // Pattern pattern;
+  // Step **activeStep = nullptr;
+  // float *globalValueInput = nullptr;
+  // float *globalValueParam = nullptr;
+  // bool *globalGate = nullptr;
+  // int *polyphonyMode = nullptr;
+  // bool *stepsStates = nullptr;
+  // bool *unisonStates = nullptr;
 
+  // PatternDisplayConsumer() {
+  //   this->pattern.init();
+  // }
+};
+
+struct PatternDisplayWidget : BaseDisplayWidget {
   NVGcolor lcdGhostColor = nvgRGB(0x1e, 0x1f, 0x1d);
 
   NVGcolor lcdActiveColor = nvgRGB(0xff, 0xd4, 0x2a);
@@ -33,6 +39,8 @@ struct PatternDisplayWidget : BaseDisplayWidget {
   NVGcolor lcdDisabledMutColor = nvgRGB(0x30, 0x4e, 0x5e);
 
   std::shared_ptr<Font> font;
+
+  std::shared_ptr<PatternDisplayConsumer> consumer;
 
   float padding = 6.0f;
   Vec area;
@@ -48,6 +56,7 @@ struct PatternDisplayWidget : BaseDisplayWidget {
 
   PatternDisplayWidget() {
     font = APP->window->loadFont(asset::plugin(pluginInstance, "res/fonts/Nunito/Nunito-Black.ttf"));
+    consumer = std::make_shared<PatternDisplayConsumer>();
   }
 
   void setupSizes() {
@@ -83,8 +92,8 @@ struct PatternDisplayWidget : BaseDisplayWidget {
   }
 
   void drawResolution(const DrawArgs &args) {
-    float resolutionVal = resolution ? *resolution : 8.0;
-    float phaseVal = phase ? *phase : 0.0f;
+    float resolutionVal = this->consumer->resolution;
+    float phaseVal = this->consumer->phase;
     nvgStrokeWidth(args.vg, 1.0f);
     float periodSize = area.x / resolutionVal;
     for (float i = 0.0f; i < resolutionVal; i = i + 1.0f) {
@@ -116,7 +125,7 @@ struct PatternDisplayWidget : BaseDisplayWidget {
   }
 
   void drawStep(const DrawArgs &args, Step step, bool mutated) {
-    int dir = direction ? *direction : 1;
+    int dir = this->consumer->direction;
     float radius = 2.5f;
     float workArea = area.x - 1;
     float start = padding;
@@ -156,97 +165,98 @@ struct PatternDisplayWidget : BaseDisplayWidget {
     }
   }
 
-  void drawSteps(const DrawArgs &args) {
-    nvgStrokeWidth(args.vg, 1.0f);
-    nvgScissor(args.vg, padding - 1, padding - 1, area.x + 2, area.y + 2);
-    nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
+  // void drawSteps(const DrawArgs &args) {
+  //   nvgStrokeWidth(args.vg, 1.0f);
+  //   nvgScissor(args.vg, padding - 1, padding - 1, area.x + 2, area.y + 2);
+  //   nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
 
-    if (pattern && globalGate && polyphonyMode && stepsStates && unisonStates) {
-      for (int i = 0; i < NUM_STEPS; i++) {
-        if (!pattern->steps[i].gate ^ !*globalGate) {
-          nvgStrokeColor(args.vg, lcdDisabledColor);
-          nvgFillColor(args.vg, lcdDisabledColor);
-          nvgGlobalAlpha(args.vg, 1.f);
-          drawStep(args, pattern->steps[i], false);
-          if (pattern->steps[i].mutationStrength != 0.f) {
-            nvgStrokeColor(args.vg, lcdDisabledMutColor);
-            nvgFillColor(args.vg, lcdDisabledMutColor);
-            nvgGlobalAlpha(args.vg, std::min(pattern->steps[i].mutationStrength, 1.f));
-            drawStep(args, pattern->steps[i], true);
-          }
-        }
-        if (pattern->steps[i].gate ^ !*globalGate) {
-          nvgStrokeColor(args.vg, lcdDimmedColor);
-          nvgFillColor(args.vg, lcdDimmedColor);
-          nvgGlobalAlpha(args.vg, 1.f);
-          drawStep(args, pattern->steps[i], false);
-          if (pattern->steps[i].mutationStrength != 0.f) {
-            nvgStrokeColor(args.vg, lcdDimmedMutColor);
-            nvgFillColor(args.vg, lcdDimmedMutColor);
-            nvgGlobalAlpha(args.vg, std::min(pattern->steps[i].mutationStrength, 1.f));
-            drawStep(args, pattern->steps[i], true);
-          }
-        }
-        nvgStrokeColor(args.vg, lcdActiveColor);
-        nvgFillColor(args.vg, lcdActiveColor);
-        nvgGlobalAlpha(args.vg, 1.f);
-        if (*polyphonyMode == POLYPHONIC) {
-          if (stepsStates[i]) {
-            drawStep(args, pattern->steps[i], false);
-            if (pattern->steps[i].mutationStrength != 0.f) {
-              nvgStrokeColor(args.vg, lcdActiveMutColor);
-              nvgFillColor(args.vg, lcdActiveMutColor);
-              nvgGlobalAlpha(args.vg, std::min(pattern->steps[i].mutationStrength, 1.f));
-              drawStep(args, pattern->steps[i], true);
-            }
-          }
-        } else if (*polyphonyMode == UNISON) {
-          if (unisonStates[i]) {
-            drawStep(args, pattern->steps[i], false);
-          }
-          if (stepsStates[i]) {
-            if (pattern->steps[i].mutationStrength != 0.f) {
-              nvgStrokeColor(args.vg, lcdActiveMutColor);
-              nvgFillColor(args.vg, lcdActiveMutColor);
-              nvgGlobalAlpha(args.vg, std::min(pattern->steps[i].mutationStrength, 1.f));
-              drawStep(args, pattern->steps[i], true);
-            }
-          }
-        }
-      }
-      if (*polyphonyMode == MONOPHONIC && *activeStep) {
-        Step *activeStepPtr = *activeStep;
-        if (activeStepPtr) {
-          Step activeStepCopy = *activeStepPtr;
-          drawStep(args, activeStepCopy, false);
-          if (activeStepCopy.mutationStrength != 0.f) {
-            nvgStrokeColor(args.vg, lcdActiveMutColor);
-            nvgFillColor(args.vg, lcdActiveMutColor);
-            nvgGlobalAlpha(args.vg, std::min(activeStepCopy.mutationStrength, 1.f));
-            drawStep(args, activeStepCopy, true);
-          }
-        }
-      }
-    } else {
-      nvgStrokeColor(args.vg, lcdDimmedColor);
-      nvgFillColor(args.vg, lcdDimmedColor);
-      nvgGlobalAlpha(args.vg, 1.f);
-      dummyPattern.init();
-      for (int i = 0; i < NUM_STEPS; i++) {
-        drawStep(args, dummyPattern.steps[i], false);
-      }
-      nvgStrokeColor(args.vg, lcdActiveColor);
-      nvgFillColor(args.vg, lcdActiveColor);
-      drawStep(args, dummyPattern.steps[0], false);
-    }
+  //   if (pattern && globalGate && polyphonyMode && stepsStates && unisonStates) {
+  //     for (int i = 0; i < NUM_STEPS; i++) {
+  //       if (!pattern->steps[i].gate ^ !*globalGate) {
+  //         nvgStrokeColor(args.vg, lcdDisabledColor);
+  //         nvgFillColor(args.vg, lcdDisabledColor);
+  //         nvgGlobalAlpha(args.vg, 1.f);
+  //         drawStep(args, pattern->steps[i], false);
+  //         if (pattern->steps[i].mutationStrength != 0.f) {
+  //           nvgStrokeColor(args.vg, lcdDisabledMutColor);
+  //           nvgFillColor(args.vg, lcdDisabledMutColor);
+  //           nvgGlobalAlpha(args.vg, std::min(pattern->steps[i].mutationStrength, 1.f));
+  //           drawStep(args, pattern->steps[i], true);
+  //         }
+  //       }
+  //       if (pattern->steps[i].gate ^ !*globalGate) {
+  //         nvgStrokeColor(args.vg, lcdDimmedColor);
+  //         nvgFillColor(args.vg, lcdDimmedColor);
+  //         nvgGlobalAlpha(args.vg, 1.f);
+  //         drawStep(args, pattern->steps[i], false);
+  //         if (pattern->steps[i].mutationStrength != 0.f) {
+  //           nvgStrokeColor(args.vg, lcdDimmedMutColor);
+  //           nvgFillColor(args.vg, lcdDimmedMutColor);
+  //           nvgGlobalAlpha(args.vg, std::min(pattern->steps[i].mutationStrength, 1.f));
+  //           drawStep(args, pattern->steps[i], true);
+  //         }
+  //       }
+  //       nvgStrokeColor(args.vg, lcdActiveColor);
+  //       nvgFillColor(args.vg, lcdActiveColor);
+  //       nvgGlobalAlpha(args.vg, 1.f);
+  //       if (*polyphonyMode == POLYPHONIC) {
+  //         if (stepsStates[i]) {
+  //           drawStep(args, pattern->steps[i], false);
+  //           if (pattern->steps[i].mutationStrength != 0.f) {
+  //             nvgStrokeColor(args.vg, lcdActiveMutColor);
+  //             nvgFillColor(args.vg, lcdActiveMutColor);
+  //             nvgGlobalAlpha(args.vg, std::min(pattern->steps[i].mutationStrength, 1.f));
+  //             drawStep(args, pattern->steps[i], true);
+  //           }
+  //         }
+  //       } else if (*polyphonyMode == UNISON) {
+  //         if (unisonStates[i]) {
+  //           drawStep(args, pattern->steps[i], false);
+  //         }
+  //         if (stepsStates[i]) {
+  //           if (pattern->steps[i].mutationStrength != 0.f) {
+  //             nvgStrokeColor(args.vg, lcdActiveMutColor);
+  //             nvgFillColor(args.vg, lcdActiveMutColor);
+  //             nvgGlobalAlpha(args.vg, std::min(pattern->steps[i].mutationStrength, 1.f));
+  //             drawStep(args, pattern->steps[i], true);
+  //           }
+  //         }
+  //       }
+  //     }
+  //     if (*polyphonyMode == MONOPHONIC && *activeStep) {
+  //       Step *activeStepPtr = *activeStep;
+  //       if (activeStepPtr) {
+  //         Step activeStepCopy = *activeStepPtr;
+  //         drawStep(args, activeStepCopy, false);
+  //         if (activeStepCopy.mutationStrength != 0.f) {
+  //           nvgStrokeColor(args.vg, lcdActiveMutColor);
+  //           nvgFillColor(args.vg, lcdActiveMutColor);
+  //           nvgGlobalAlpha(args.vg, std::min(activeStepCopy.mutationStrength, 1.f));
+  //           drawStep(args, activeStepCopy, true);
+  //         }
+  //       }
+  //     }
+  //   } else {
+  //     nvgStrokeColor(args.vg, lcdDimmedColor);
+  //     nvgFillColor(args.vg, lcdDimmedColor);
+  //     nvgGlobalAlpha(args.vg, 1.f);
+  //     dummyPattern.init();
+  //     for (int i = 0; i < NUM_STEPS; i++) {
+  //       drawStep(args, dummyPattern.steps[i], false);
+  //     }
+  //     nvgStrokeColor(args.vg, lcdActiveColor);
+  //     nvgFillColor(args.vg, lcdActiveColor);
+  //     drawStep(args, dummyPattern.steps[0], false);
+  //   }
 
-    nvgResetScissor(args.vg);
-    nvgGlobalCompositeOperation(args.vg, NVG_SOURCE_OVER);
-  }
+  //   nvgResetScissor(args.vg);
+  //   nvgGlobalCompositeOperation(args.vg, NVG_SOURCE_OVER);
+  // }
 
   void draw(const DrawArgs &args) override {
+    if (this->consumer->consumed) { return; }
+
     drawBackground(args);
-    if (!ready) { return; }
 
     for (int i = 1; i < NUM_STEPS; i++) {
       drawDash(args, Vec(padding + i * stepX, padding + dashLine1));
@@ -256,6 +266,7 @@ struct PatternDisplayWidget : BaseDisplayWidget {
       drawCross(args, Vec(padding + i * stepX, padding + crossLine3));
     }
     drawResolution(args);
-    drawSteps(args);
+    // drawSteps(args);
+    this->consumer->consumed = true;
   }
 };

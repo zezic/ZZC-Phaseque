@@ -12,18 +12,20 @@
 
 struct PatternsDisplayConsumer {
   unsigned int currentPattern = 0;
+  unsigned int currentPatternGoTo = 1;
   std::bitset<NUM_PATTERNS> dirtyMask;
+  bool consumed = false;
 };
 
 struct PatternsDisplayProducer {
   unsigned int goToRequest = 0;
-  bool hasRequest = false;
+  bool hasGoToRequest = false;
+
+  unsigned int nextPatternRequest = 0;
+  bool hasNextPatternRequest = false;
 };
 
-struct PatternsDisplayWidget : BaseDisplayWidget {
-  // Pattern *patterns = nullptr;
-  // Pattern *currentPattern = nullptr;
-  // int *currentIdx = nullptr;
+struct PatternsDisplay : BaseDisplayWidget {
   NVGcolor black = nvgRGB(0x00, 0x00, 0x00);
   NVGcolor white = nvgRGB(0xff, 0xff, 0xff);
   NVGcolor lcdActiveColor = nvgRGB(0xff, 0xd4, 0x2a);
@@ -35,15 +37,11 @@ struct PatternsDisplayWidget : BaseDisplayWidget {
   float patSize = 17.0f;
   float gapSize = 3.0f;
   float padding = 4.0f;
-  // int *goToRequest = nullptr;
-  // int *patternFlashNeg = nullptr;
-  // int *patternFlashPos = nullptr;
   float flashes[NUM_PATTERNS] = { 0.f };
 
-  PatternsDisplayConsumer consumer;
-  PatternsDisplayProducer producer;
+  std::shared_ptr<PatternsDisplayConsumer> consumer;
 
-  PatternsDisplayWidget() {
+  PatternsDisplay() {
     font = APP->window->loadFont(asset::plugin(pluginInstance, "res/fonts/Nunito/Nunito-Bold.ttf"));
   }
 
@@ -71,25 +69,6 @@ struct PatternsDisplayWidget : BaseDisplayWidget {
       nvgFillColor(args.vg, lcdDisabledColor);
       nvgFill(args.vg);
     }
-    // float flash = flashes[idx];
-    // if (flash < 0.f) {
-    //   nvgBeginPath(args.vg);
-    //   nvgRoundedRect(args.vg, x, y, patSize, patSize, 1.0);
-    //   nvgFillColor(args.vg, negColor);
-    //   nvgGlobalAlpha(args.vg, -flash);
-    //   nvgFill(args.vg);
-    //   nvgGlobalAlpha(args.vg, 1.f);
-    //   flashes[idx] += 0.02f;
-    // }
-    // if (flash > 0.f) {
-    //   nvgBeginPath(args.vg);
-    //   nvgRoundedRect(args.vg, x, y, patSize, patSize, 1.0);
-    //   nvgFillColor(args.vg, posColor);
-    //   nvgGlobalAlpha(args.vg, flash);
-    //   nvgFill(args.vg);
-    //   nvgGlobalAlpha(args.vg, 1.f);
-    //   flashes[idx] -= 0.02f;
-    // }
 
     Vec textPos = Vec(x + patSize / 2.0f, y + patSize / 2.0f + 2.5f);
     if (idx == currentIdxVal) {
@@ -101,48 +80,55 @@ struct PatternsDisplayWidget : BaseDisplayWidget {
     }
     std::string humanString = std::to_string(idx + 1);
     nvgText(args.vg, textPos.x, textPos.y, humanString.c_str(), NULL);
-    // if (!isNear(flash, 0.f, 0.03f)) {
-    //   nvgGlobalAlpha(args.vg, std::abs(flash));
-    //   nvgFillColor(args.vg, white);
-    //   nvgText(args.vg, textPos.x, textPos.y, string.c_str(), NULL);
-    //   nvgGlobalAlpha(args.vg, 1.f);
-    // }
   }
 
   void draw(const DrawArgs &args) override {
-    drawBackground(args);
+    this->drawBackground(args);
     nvgFontSize(args.vg, 9);
     nvgFontFaceId(args.vg, font->handle);
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER);
     nvgTextLetterSpacing(args.vg, -1.0);
-    // if (patternFlashNeg) {
-    //   int flash = *patternFlashNeg;
-    //   if (flash != 0) {
-    //     flashes[flash] = -1.f;
-    //     *patternFlashNeg = 0;
-    //   }
-    // }
-    // if (patternFlashPos) {
-    //   int flash = *patternFlashPos;
-    //   if (flash != 0) {
-    //     flashes[flash] = 1.f;
-    //     *patternFlashPos = 0;
-    //   }
-    // }
-    // if (patterns && currentPattern && currentIdx) {
-    //   int currentPatternGoTo = currentPattern->goTo;
-    //   int currentIdxVal = currentIdx ? *currentIdx : 1;
-    //   for (int i = 1; i < NUM_PATTERNS + 1; i++) {
-    //     drawPattern(args, patterns[i].hasCustomSteps(), i, currentPatternGoTo, currentIdxVal);
-    //   }
-    // } else {
-    //   for (int i = 1; i < NUM_PATTERNS + 1; i++) {
-    //     drawPattern(args, false, i, 2, 1);
-    //   }
-    // }
     for (unsigned int i = 0; i < NUM_PATTERNS; i++) {
-      drawPattern(args, this->consumer.dirtyMask.test(i), i, 1, this->consumer.currentPattern);
+      drawPattern(args, this->consumer->dirtyMask.test(i), i, this->consumer->currentPatternGoTo, this->consumer->currentPattern);
     }
+  }
+};
+
+struct PatternsDisplayWidget : widget::OpaqueWidget {
+  float patSize = 17.0f;
+  float gapSize = 3.0f;
+  float padding = 4.0f;
+
+  std::shared_ptr<PatternsDisplayConsumer> consumer;
+  std::shared_ptr<PatternsDisplayProducer> producer;
+
+	widget::FramebufferWidget* fb;
+  PatternsDisplay* pd;
+
+  PatternsDisplayWidget() {
+    consumer = std::make_shared<PatternsDisplayConsumer>();
+    producer = std::make_shared<PatternsDisplayProducer>();
+
+    this->fb = new widget::FramebufferWidget;
+    this->addChild(this->fb);
+
+    this->pd = new PatternsDisplay;
+    this->pd->consumer = this->consumer;
+    this->fb->addChild(this->pd);
+  }
+
+  void setupSize(Vec size) {
+    this->pd->setSize(size);
+    this->fb->setSize(size);
+    this->setSize(size);
+  }
+
+  void step() override {
+    if (!this->consumer->consumed) {
+      this->fb->dirty = true;
+    }
+    Widget::step();
+    this->consumer->consumed = true;
   }
 
   void onButton(const event::Button &e) override {
@@ -153,21 +139,20 @@ struct PatternsDisplayWidget : BaseDisplayWidget {
     } else {
       return;
     }
-    if (this->producer.hasRequest) {
-      return;
-    }
     float x = e.pos.x;
     float y = e.pos.y;
     float ix = clamp(floorf((x - padding) / (patSize + gapSize)), 0.0f, 7.0f);
     float iy = clamp(floorf((box.size.y - y - padding) / (patSize + gapSize)), 0.0f, 3.0f);
     float targetIdx = fmodf(ix, 4.0f) + (iy * 4.0f) + (ix >= 4.0f ? 16.0f : 0.0f);
     unsigned int targetIdxInt = clamp((unsigned int) targetIdx, 0, NUM_PATTERNS - 1);
-    this->producer.goToRequest = targetIdxInt;
-    this->producer.hasRequest = true;
-    // if (button == GLFW_MOUSE_BUTTON_LEFT && goToRequest) {
-    //   *goToRequest = (int) targetIdx;
-    // } else if (button == GLFW_MOUSE_BUTTON_RIGHT && currentPattern) {
-    //   currentPattern->goTo = targetIdx;
-    // }
+    if (button == GLFW_MOUSE_BUTTON_LEFT) {
+      if (this->producer->hasGoToRequest) { return; }
+      this->producer->goToRequest = targetIdxInt;
+      this->producer->hasGoToRequest = true;
+    } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+      if (this->producer->hasNextPatternRequest) { return; }
+      this->producer->nextPatternRequest = targetIdxInt;
+      this->producer->hasNextPatternRequest = true;
+    }
   }
 };
