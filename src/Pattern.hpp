@@ -1,3 +1,4 @@
+#pragma once
 #include "ZZC.hpp"
 #include "Step.hpp"
 

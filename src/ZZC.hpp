@@ -1,5 +1,13 @@
+#pragma once
 #include "rack0.hpp"
 #include "window.hpp"
+
+enum PolyphonyModes {
+  MONOPHONIC,
+  POLYPHONIC,
+  UNISON,
+  NUM_POLYPHONY_MODES
+};
 
 using namespace rack;
 

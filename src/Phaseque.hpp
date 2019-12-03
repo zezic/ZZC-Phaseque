@@ -11,18 +11,9 @@
 #define MAX_VOICES 16
 #define NUM_PATTERNS 32
 
-using namespace rack;
-
 struct StepAttrParamQuantityBase : ParamQuantity {
   int item;
   int attr;
-};
-
-enum PolyphonyModes {
-  MONOPHONIC,
-  POLYPHONIC,
-  UNISON,
-  NUM_POLYPHONY_MODES
 };
 
 struct Phaseque : Module {
@@ -242,10 +233,10 @@ struct Phaseque : Module {
 
   /* CommunicationWithDisplays */
 
-  std::shared_ptr<GridDisplayConsumer> patternsDisplayConsumer;
-  std::shared_ptr<GridDisplayProducer> patternsDisplayProducer;
+  std::shared_ptr<GridDisplayConsumer> gridDisplayConsumer;
+  std::shared_ptr<GridDisplayProducer> gridDisplayProducer;
 
-  std::shared_ptr<MainDisplayConsumer> patternDisplayConsumer;
+  std::shared_ptr<MainDisplayConsumer> mainDisplayConsumer;
 
   void setPolyMode(PolyphonyModes polyMode) {
     if (polyMode == this->polyphonyMode) {
@@ -304,13 +295,13 @@ struct Phaseque : Module {
     if (this->wait) {
       lights[WAIT_LED].value = 1.1f;
     }
-    if (this->patternsDisplayProducer->hasNextPatternRequest) {
-      this->pattern.goTo = this->patternsDisplayProducer->nextPatternRequest;
-      this->patternsDisplayProducer->hasNextPatternRequest = false;
+    if (this->gridDisplayProducer->hasNextPatternRequest) {
+      this->pattern.goTo = this->gridDisplayProducer->nextPatternRequest;
+      this->gridDisplayProducer->hasNextPatternRequest = false;
     }
-    if (this->patternsDisplayProducer->hasGoToRequest) {
-      unsigned int goToRequest = this->patternsDisplayProducer->goToRequest;
-      this->patternsDisplayProducer->hasGoToRequest = false;
+    if (this->gridDisplayProducer->hasGoToRequest) {
+      unsigned int goToRequest = this->gridDisplayProducer->goToRequest;
+      this->gridDisplayProducer->hasGoToRequest = false;
       if (goToRequest != this->patternIdx) {
         this->goToPattern(goToRequest);
       }
@@ -787,8 +778,8 @@ struct Phaseque : Module {
       patterns[i].randomize();
     }
     takeOutCurrentPattern();
-    this->patternsDisplayConsumer->dirtyMask.set();
-    this->patternsDisplayConsumer->consumed = false;
+    this->gridDisplayConsumer->dirtyMask.set();
+    this->gridDisplayConsumer->consumed = false;
   }
 
   void randomizeAllReso() {
@@ -819,8 +810,8 @@ struct Phaseque : Module {
   }
 
   void showCustomSteps() {
-    if (this->patternsDisplayConsumer) {
-      this->patternsDisplayConsumer->dirtyMask.set(this->patternIdx, this->pattern.hasCustomSteps());
+    if (this->gridDisplayConsumer) {
+      this->gridDisplayConsumer->dirtyMask.set(this->patternIdx, this->pattern.hasCustomSteps());
     }
   }
 
@@ -919,7 +910,7 @@ struct Phaseque : Module {
     }
     patternIdx = 0;
     takeOutCurrentPattern();
-    polyphonyMode = MONOPHONIC;
+    polyphonyMode = PolyphonyModes::MONOPHONIC;
   }
 
   void onRandomize() override {

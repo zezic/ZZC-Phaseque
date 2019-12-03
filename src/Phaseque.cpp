@@ -680,19 +680,34 @@ void Phaseque::process(const ProcessArgs &args) {
   lastPhaseParamInput = params[PHASE_PARAM].getValue();
   lastClockInputState = inputs[CLOCK_INPUT].isConnected();
 
-  if (this->patternsDisplayConsumer->consumed && this->patternsDisplayConsumer->currentPattern != this->patternIdx) {
-    this->patternsDisplayConsumer->currentPattern = this->patternIdx;
-    this->patternsDisplayConsumer->currentPatternGoTo = this->pattern.goTo;
-    this->patternsDisplayConsumer->consumed = false;
+  if (this->gridDisplayConsumer->consumed && this->gridDisplayConsumer->currentPattern != this->patternIdx) {
+    this->gridDisplayConsumer->currentPattern = this->patternIdx;
+    this->gridDisplayConsumer->currentPatternGoTo = this->pattern.goTo;
+    this->gridDisplayConsumer->consumed = false;
     for (unsigned int i = 0; i < NUM_PATTERNS; i++) {
-      this->patternsDisplayConsumer->dirtyMask.set(i, this->patterns[i].hasCustomSteps());
+      this->gridDisplayConsumer->dirtyMask.set(i, this->patterns[i].hasCustomSteps());
     }
   }
-  if (this->patternDisplayConsumer->consumed) {
-    this->patternDisplayConsumer->phase = this->phaseShifted;
-    this->patternDisplayConsumer->direction = this->direction;
-    this->patternDisplayConsumer->resolution = this->pattern.resolution;
-    this->patternDisplayConsumer->consumed = false;
+  if (this->mainDisplayConsumer->consumed) {
+    this->mainDisplayConsumer->resolution = this->pattern.resolution;
+    this->mainDisplayConsumer->phase = this->phaseShifted;
+    this->mainDisplayConsumer->direction = this->direction;
+    this->mainDisplayConsumer->pattern = this->pattern;
+    this->mainDisplayConsumer->globalGate = this->globalGate;
+    this->mainDisplayConsumer->polyphonyMode = this->polyphonyMode;
+    std::memcpy(this->mainDisplayConsumer->stepsStates, this->stepsStates, sizeof(this->stepsStates));
+    std::memcpy(this->mainDisplayConsumer->unisonStates, this->unisonStates, sizeof(this->unisonStates));
+    this->mainDisplayConsumer->globalShift = this->globalShift;
+    this->mainDisplayConsumer->globalLen = this->globalLen;
+    if (this->activeStep) {
+      this->mainDisplayConsumer->activeStep = *this->activeStep;
+      this->mainDisplayConsumer->hasActiveStep = true;
+    } else {
+      this->mainDisplayConsumer->hasActiveStep = false;
+    }
+    this->mainDisplayConsumer->exprCurveCV = inputs[GLOBAL_EXPR_CURVE_INPUT].getVoltage();
+    this->mainDisplayConsumer->exprPowerCV = inputs[GLOBAL_EXPR_POWER_INPUT].getVoltage();
+    this->mainDisplayConsumer->consumed = false;
   }
 }
 
@@ -756,8 +771,8 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
   if (module) {
     Phaseque *phaseque = dynamic_cast<Phaseque*>(module);
     assert(phaseque);
-    phaseque->patternsDisplayConsumer = patternsDisplayDisplay->consumer;
-    phaseque->patternsDisplayProducer = patternsDisplayDisplay->producer;
+    phaseque->gridDisplayConsumer = patternsDisplayDisplay->consumer;
+    phaseque->gridDisplayProducer = patternsDisplayDisplay->producer;
   }
   addChild(patternsDisplayDisplay);
 
@@ -787,7 +802,7 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
   if (module) {
     Phaseque *phaseque = dynamic_cast<Phaseque*>(module);
     assert(phaseque);
-    phaseque->patternDisplayConsumer = patternDisplay->consumer;
+    phaseque->mainDisplayConsumer = patternDisplay->consumer;
     // patternDisplay->resolution = &module->resolution;
     // patternDisplay->phase = &module->phaseShifted;
     // patternDisplay->pattern = &module->pattern;
