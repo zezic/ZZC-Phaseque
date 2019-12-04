@@ -1,6 +1,8 @@
 #pragma once
 #include "ZZC.hpp"
 
+using namespace rack;
+
 struct Mutator {
   float factor = 0.0f;
 

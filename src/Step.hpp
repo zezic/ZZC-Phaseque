@@ -19,16 +19,6 @@ enum StepAttr {
   STEP_ATTRS_TOTAL
 };
 
-std::vector<std::string> StepAttrNames = {
-  "value",
-  "length",
-  "shift",
-  "expression in",
-  "expression curve",
-  "expression power",
-  "expression out"
-};
-
 struct AttrDefaults {
   float defaultValue;
   float minValue;
@@ -36,7 +26,7 @@ struct AttrDefaults {
   float mutMult;
 };
 
-AttrDefaults getAttrDefaults(int idx) {
+inline AttrDefaults getAttrDefaults(int idx) {
   switch(idx) {
     case STEP_VALUE: return AttrDefaults {0.0f, -2.0f, 2.0f, 0.2f};
     case STEP_LEN: return AttrDefaults {baseStepLen, 0.0f, baseStepLen * 2.0f, 1.0f};

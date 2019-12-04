@@ -4,31 +4,7 @@
 
 #define NUM_PATTERNS 32
 
-template<size_t c>
-struct ForLoop {
-  template<template <size_t> class Func>
-  static void iterate(Module *module) {
-    Func<c>()(module);
-    if (c > 0) {}
-    ForLoop<c-1>::template iterate<Func>(module);
-  }
-};
-
-template<>
-struct ForLoop<0> {
-  template<template <size_t> class Func>
-  static void iterate(Module *module) {
-    Func<0>()(module);
-  }
-};
-
-float patternToVolts(int idx) {
-  return (idx - 1) * 1.0f / 12.0f;
-}
-
-unsigned int voltsToPattern(float volts) {
-  return clamp((int) std::floor((volts * 12.f)), 0, NUM_PATTERNS);
-}
+using namespace rack;
 
 struct NegSchmittTrigger : dsp::SchmittTrigger {
   bool process(float in) {
@@ -102,7 +78,7 @@ struct Limits {
   unsigned int high;
 };
 
-Limits getRowLimits(int idx) {
+inline Limits getRowLimits(int idx) {
   unsigned int rowIdx = (idx) / 4;
   Limits limits;
   limits.low = rowIdx * 4;
@@ -110,7 +86,7 @@ Limits getRowLimits(int idx) {
   return limits;
 }
 
-Limits getColumnLimits(int idx) {
+inline Limits getColumnLimits(int idx) {
   unsigned int baseIdx = idx % 4;
   Limits limits;
   limits.low = baseIdx;
@@ -137,7 +113,7 @@ inline float fastmod(float value, float base) {
   return value - base;
 }
 
-float curve(float phase, float curvature, float power, float in, float out) {
+inline float curve(float phase, float curvature, float power, float in, float out) {
   float range = out - in;
   if (curvature == 0.0f) {
     return in + range * phase;

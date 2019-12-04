@@ -7,368 +7,439 @@
 
 #include "ZZC.hpp"
 #include "Phaseque.hpp"
+#include "PhasequeWidget.hpp"
 #include "helpers.hpp"
 
-struct PhasequePatternResoChange : history::ModuleAction {
-  int paramId;
-  unsigned int patternNum;
-  float oldValue;
-  float newValue;
+void Phaseque::setPolyMode(PolyphonyModes polyMode) {
+  if (polyMode == this->polyphonyMode) { return; }
+  this->polyphonyMode = polyMode;
+}
 
-  void undo() override {
-    app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
-    assert(mw);
-    Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
-    phaseq->patterns[patternNum].resolution = oldValue;
-    if (phaseq->patternIdx == patternNum) {
-      phaseq->pattern.resolution = oldValue;
-      mw->module->params[paramId].value = oldValue;
-    } else {
-      phaseq->patternFlashNeg = patternNum;
-    }
-  }
+void Phaseque::goToPattern(unsigned int targetIdx) {
+  unsigned int targetIdxSafe = eucMod(targetIdx, NUM_PATTERNS);
+  this->storeCurrentPattern();
+  this->patternIdx = targetIdxSafe;
+  this->takeOutCurrentPattern();
+}
 
-  void redo() override {
-    app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
-    assert(mw);
-    Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
-    phaseq->patterns[patternNum].resolution = newValue;
-    if (phaseq->patternIdx == patternNum) {
-      phaseq->pattern.resolution = newValue;
-      mw->module->params[paramId].value = newValue;
-    } else {
-      phaseq->patternFlashPos = patternNum;
-    }
-  }
-
-  PhasequePatternResoChange() {
-    name = "change pattern resolution";
-  }
-};
-
-struct ZZC_PhasequePatternResoKnob : SvgKnob {
-  ZZC_PhasequePatternResoKnob() {
-    setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-25-Encoder.svg")));
-    shadow->box.size = Vec(29, 29);
-    shadow->box.pos = Vec(-2, 2);
-    shadow->blurRadius = 15.0f;
-    shadow->opacity = 1.0f;
-    // speed = 8.f;
-    smooth = false;
-    snap = true;
-    maxAngle = M_PI * 4;
-  }
-
-  void onDragEnd(const event::DragEnd &e) override {
-    if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+void Phaseque::goToFirstNonEmpty() {
+  for (int i = 0; i < NUM_PATTERNS; i++) {
+    if (this->patterns[i].hasCustomSteps()) {
+      this->goToPattern(i);
       return;
+    }
+  }
+}
 
-    APP->window->cursorUnlock();
+void Phaseque::jumpToStep(Step step) {
+  phase = eucMod((direction == 1 ? step.in() : step.out()) - phaseParam , 1.0f);
+  jump = true;
+}
 
-    if (paramQuantity) {
-      float newValue = paramQuantity->getValue();
-      if (oldValue != newValue) {
-        PhasequePatternResoChange *h = new PhasequePatternResoChange;
-        h->moduleId = paramQuantity->module->id;
-        h->paramId = paramQuantity->paramId;
-        Phaseque* phaseq = static_cast<Phaseque*>(paramQuantity->module);
-        h->patternNum = phaseq->patternIdx;
-        h->oldValue = oldValue;
-        h->newValue = newValue;
-        h->name = "change pattern " + std::to_string(phaseq->patternIdx) + " resolution";
-        APP->history->push(h);
+void Phaseque::processGlobalParams() {
+  // Gates
+  if (inputs[GLOBAL_GATE_INPUT].isConnected()) {
+    globalGate = globalGateInternal ^ (inputs[GLOBAL_GATE_INPUT].getVoltage() > 1.0f);
+  } else {
+    globalGate = globalGateInternal;
+  }
+
+  // Shift
+  if (inputs[GLOBAL_SHIFT_INPUT].isConnected()) {
+    globalShift = params[GLOBAL_SHIFT_PARAM].getValue() + clamp(inputs[GLOBAL_SHIFT_INPUT].getVoltage() * 0.2f * baseStepLen, -baseStepLen, baseStepLen);
+  } else {
+    globalShift = params[GLOBAL_SHIFT_PARAM].getValue();
+  }
+
+  // Length
+  if (inputs[GLOBAL_LEN_INPUT].isConnected()) {
+    globalLen = params[GLOBAL_LEN_PARAM].getValue() * (clamp(inputs[GLOBAL_LEN_INPUT].getVoltage(), -5.0f, 4.999f) * 0.2f + 1.0f);
+  } else {
+    globalLen = params[GLOBAL_LEN_PARAM].getValue();
+  }
+}
+
+void Phaseque::processPatternNav() {
+  if (waitButtonTrigger.process(params[WAIT_SWITCH_PARAM].getValue())) {
+    wait ^= true;
+  }
+  if (this->wait) {
+    lights[WAIT_LED].value = 1.1f;
+  }
+  if (this->gridDisplayProducer->hasNextPatternRequest) {
+    this->pattern.goTo = this->gridDisplayProducer->nextPatternRequest;
+    this->gridDisplayProducer->hasNextPatternRequest = false;
+  }
+  if (this->gridDisplayProducer->hasGoToRequest) {
+    unsigned int goToRequest = this->gridDisplayProducer->goToRequest;
+    this->gridDisplayProducer->hasGoToRequest = false;
+    if (goToRequest != this->patternIdx) {
+      this->goToPattern(goToRequest);
+    }
+  }
+  if (this->wait) {
+    return;
+  }
+  if (inputs[SEQ_INPUT].isConnected() && seqInputTrigger.process(inputs[SEQ_INPUT].getVoltage())) {
+    if (patternIdx != pattern.goTo) {
+      goToPattern(pattern.goTo);
+      return;
+    }
+  }
+  if (inputs[GOTO_INPUT].isConnected()) {
+
+    bool ptrnInputIsConnected = inputs[PTRN_INPUT].isConnected();
+    unsigned int target = ptrnInputIsConnected ? ((int) std::floor(inputs[PTRN_INPUT].getVoltage() * 12.f)) % NUM_PATTERNS : 0;
+    if (goToInputTrigger.process(inputs[GOTO_INPUT].getVoltage())) {
+      if (ptrnInputIsConnected) {
+        if (target != this->patternIdx) {
+          this->goToPattern(target);
+          this->lastGoToRequest = target;
+          return;
+        }
+      } else {
+        this->goToFirstNonEmpty();
+      }
+    } else if (inputs[GOTO_INPUT].getVoltage() > 1.0f) {
+      if (target != this->lastGoToRequest && target != this->patternIdx) {
+        this->goToPattern(target);
+        this->lastGoToRequest = target;
+        return;
       }
     }
   }
-};
-
-struct PhasequePatternShiftChange : history::ModuleAction {
-  int paramId;
-  unsigned int patternNum;
-  float oldValue;
-  float newValue;
-
-  void undo() override {
-    app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
-    assert(mw);
-    Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
-    phaseq->patterns[patternNum].shift = oldValue;
-    if (phaseq->patternIdx == patternNum) {
-      phaseq->pattern.shift = oldValue;
-      mw->module->params[paramId].value = oldValue;
-    } else {
-      phaseq->patternFlashNeg = patternNum;
+  if (inputs[PREV_INPUT].isConnected() && prevPtrnInputTrigger.process(inputs[PREV_INPUT].getVoltage())) {
+    for (int i = this->patternIdx - 1; i >= 0; i--) {
+      if (patterns[i].hasCustomSteps()) {
+        goToPattern(i);
+        return;
+      }
     }
-  }
-
-  void redo() override {
-    app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
-    assert(mw);
-    Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
-    phaseq->patterns[patternNum].shift = newValue;
-    if (phaseq->patternIdx == patternNum) {
-      phaseq->pattern.shift = newValue;
-      mw->module->params[paramId].value = newValue;
-    } else {
-      phaseq->patternFlashPos = patternNum;
-    }
-  }
-
-  PhasequePatternShiftChange() {
-    name = "change pattern shift";
-  }
-};
-
-struct ZZC_DisplayKnob : SvgKnob {
-  ZZC_DirectKnobDisplay *disp = nullptr;
-  float strokeWidth = 1.5f;
-  bool unipolar = false;
-
-  ZZC_DisplayKnob() {
-    smooth = false;
-    disp = new ZZC_DirectKnobDisplay();
-    fb->addChild(disp);
-    disp->box.pos = math::Vec(0, 0);
-    disp->strokeWidth = strokeWidth;
-    disp->box.size = fb->box.size;
-  }
-
-  void recalcSizes() {
-    float padding = strokeWidth + 2.f;
-    sw->box.pos = math::Vec(padding, padding);
-    tw->box.size = sw->box.size;
-    math::Vec size = math::Vec(padding * 2, padding * 2).plus(sw->box.size);
-    setSize(size);
-    fb->box.size = size;
-    shadow->box.size = sw->box.size;
-    // Move shadow downward by 20% and take value display into account
-    shadow->box.pos = math::Vec(padding, padding).plus(math::Vec(0, sw->box.size.y * 0.2));
-    disp->strokeWidth = strokeWidth;
-    disp->box.size = fb->box.size;
-  }
-
-  void onChange(const event::Change &e) override {
-    if (paramQuantity) {
-      disp->setLimits(paramQuantity->getMinValue(), paramQuantity->getMaxValue());
-      disp->value = paramQuantity->getValue();
-    }
-    SvgKnob::onChange(e);
-  }
-
-  void randomize() override {};
-};
-
-struct ZZC_PhasequePatternShiftKnob : ZZC_DisplayKnob {
-  ZZC_PhasequePatternShiftKnob() {
-    setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-25-Encoder.svg")));
-    shadow->box.size = Vec(31, 31);
-    shadow->box.pos = Vec(0, 2);
-    shadow->blurRadius = 15.0f;
-    shadow->opacity = 1.0f;
-    maxAngle = M_PI * 1.5;
-    recalcSizes();
-  }
-
-  void onDragEnd(const event::DragEnd &e) override {
-    if (e.button != GLFW_MOUSE_BUTTON_LEFT)
-      return;
-
-    APP->window->cursorUnlock();
-
-    if (paramQuantity) {
-      float newValue = paramQuantity->getSmoothValue();
-      if (oldValue != newValue) {
-        PhasequePatternShiftChange *h = new PhasequePatternShiftChange;
-        h->moduleId = paramQuantity->module->id;
-        h->paramId = paramQuantity->paramId;
-        Phaseque* phaseq = static_cast<Phaseque*>(paramQuantity->module);
-        h->patternNum = phaseq->patternIdx;
-        h->oldValue = oldValue;
-        h->newValue = newValue;
-        h->name = "change pattern " + std::to_string(phaseq->patternIdx) + " shift";
-        APP->history->push(h);
+    for (unsigned int i = NUM_PATTERNS - 1; i > patternIdx; i--) {
+      if (patterns[i].hasCustomSteps()) {
+        goToPattern(i);
+        return;
       }
     }
   }
-};
-
-struct ZZC_PhasequeMutaKnob : SvgKnob {
-  ZZC_PhasequeMutaKnob() {
-    setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-27-Encoder.svg")));
-    shadow->box.size = Vec(33, 33);
-    shadow->box.pos = Vec(-3, 2);
-    shadow->blurRadius = 15.0f;
-    shadow->opacity = 1.0f;
-    smooth = false;
+  if (inputs[NEXT_INPUT].isConnected() && nextPtrnInputTrigger.process(inputs[NEXT_INPUT].getVoltage())) {
+    for (unsigned int i = this->patternIdx + 1; i < NUM_PATTERNS; i++) {
+      if (patterns[i].hasCustomSteps()) {
+        goToPattern(i);
+        return;
+      }
+    }
+    for (unsigned int i = 0; i < this->patternIdx; i++) {
+      if (patterns[i].hasCustomSteps()) {
+        goToPattern(i);
+        return;
+      }
+    }
   }
-
-  void onDragEnd(const event::DragEnd &e) override {
-    if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+  if (inputs[RND_INPUT].isConnected() && firstInputTrigger.process(inputs[RND_INPUT].getVoltage())) {
+    unsigned int nonEmpty[NUM_PATTERNS];
+    unsigned int idx = 0;
+    for (unsigned int i = 0; i < NUM_PATTERNS; i++) {
+      if (i != this->patternIdx && patterns[i].hasCustomSteps()) {
+        nonEmpty[idx] = i;
+        idx++;
+      }
+    }
+    if (idx != 0) {
+      unsigned int randIdx = clamp((unsigned int) (random::uniform() * idx), 0, idx);
+      goToPattern(nonEmpty[randIdx]);
       return;
-    APP->window->cursorUnlock();
+    }
   }
-};
+  if (inputs[LEFT_INPUT].isConnected() && leftInputTrigger.process(inputs[LEFT_INPUT].getVoltage())) {
+    Limits limits = getRowLimits(this->patternIdx);
+    for (int i = ((int) patternIdx) - 1; i >= (int) limits.low; i--) {
+      if (patterns[i].hasCustomSteps()) {
+        goToPattern(i);
+        return;
+      }
+    }
+    for (unsigned int i = limits.high - 1; i > patternIdx; i--) {
+      if (patterns[i].hasCustomSteps()) {
+        goToPattern(i);
+        return;
+      }
+    }
+  }
+  if (inputs[RIGHT_INPUT].isConnected() && rightInputTrigger.process(inputs[RIGHT_INPUT].getVoltage())) {
+    Limits limits = getRowLimits(this->patternIdx);
+    for (unsigned int i = patternIdx + 1; i < limits.high; i++) {
+      if (patterns[i].hasCustomSteps()) {
+        goToPattern(i);
+        return;
+      }
+    }
+    for (unsigned int i = limits.low; i < this->patternIdx; i++) {
+      if (patterns[i].hasCustomSteps()) {
+        goToPattern(i);
+        return;
+      }
+    }
+  }
+  if (inputs[DOWN_INPUT].isConnected() && downInputTrigger.process(inputs[DOWN_INPUT].getVoltage())) {
+    Limits limits = getColumnLimits(patternIdx);
+    for (int i = patternIdx - 4; i >= (int) limits.low; i -= 4) {
+      if (patterns[i].hasCustomSteps()) {
+        goToPattern(i);
+        return;
+      }
+    }
+    for (int i = limits.high - 4; i > (int) this->patternIdx; i -= 4) {
+      if (patterns[i].hasCustomSteps()) {
+        goToPattern(i);
+        return;
+      }
+    }
+  }
+  if (inputs[UP_INPUT].isConnected() && upInputTrigger.process(inputs[UP_INPUT].getVoltage())) {
+    Limits limits = getColumnLimits(patternIdx);
+    for (int i = patternIdx + 4; i <= (int) limits.high; i += 4) {
+      if (patterns[i].hasCustomSteps()) {
+        goToPattern(i);
+        return;
+      }
+    }
+    for (unsigned int i = limits.low; i < patternIdx; i += 4) {
+      if (patterns[i].hasCustomSteps()) {
+        goToPattern(i);
+        return;
+      }
+    }
+  }
+}
 
-struct PhasequeStepAttrChange : history::ModuleAction {
-  int paramId;
-  unsigned int patternNum;
-  int step;
-  int attr;
-  float oldValue;
-  float newValue;
+void Phaseque::processButtons() {
+  if (tempoTrackButtonTrigger.process(params[TEMPO_TRACK_SWITCH_PARAM].getValue())) {
+    tempoTrack ^= true;
+    lights[TEMPO_TRACK_LED].value = tempoTrack ? 1.0f : 0.0f;
+  }
+  if (absModeTrigger.process(params[ABS_MODE_SWITCH_PARAM].getValue())) {
+    absMode ^= true;
+    lights[ABS_MODE_LED].value = absMode ? 1.0f : 0.0f;
+  }
+  if (clutchButtonTrigger.process(params[CLUTCH_SWITCH_PARAM].getValue()) || (inputs[CLUTCH_INPUT].isConnected() && clutchInputTrigger.process(inputs[CLUTCH_INPUT].getVoltage()))) {
+    clutch ^= true;
+    lights[CLUTCH_LED].value = clutch ? 1.0f : 0.0f;
+  }
+  resetPulse = resetButtonTrigger.process(params[RESET_SWITCH_PARAM].getValue()) || (inputs[RESET_INPUT].isConnected() && resetInputTrigger.process(inputs[RESET_INPUT].getVoltage()));
+  if (resetPulse) {
+    samplesSinceLastReset = 0;
+    tempoTracker.reset();
+  } else {
+    samplesSinceLastReset++;
+    if (samplesSinceLastReset == __INT_MAX__) {
+      samplesSinceLastReset = 384000;
+    }
+  }
+  if (resetPulse) {
+    lights[RESET_LED].value = 1.1f;
+  }
+  for (int i = 0; i < NUM_STEPS; i++) {
+    if (gateButtonsTriggers[i].process(params[GATE_SWITCH_PARAM + i].getValue())) {
+      pattern.steps[i].gate ^= true;
+    }
+  }
+  if (globalGateButtonTrigger.process(params[GLOBAL_GATE_SWITCH_PARAM].getValue())) {
+    globalGateInternal ^= true;
+  }
+}
 
-  void undo() override {
-    app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
-    assert(mw);
-    Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
-    phaseq->patterns[patternNum].steps[step].setAttrBase(attr, oldValue);
-    if (phaseq->patternIdx == patternNum) {
-      phaseq->pattern.steps[step].setAttrBase(attr, oldValue);
-      mw->module->params[paramId].value = oldValue;
+void Phaseque::processMutaInputs() {
+  if (inputs[MUTA_DEC_INPUT].isConnected()) {
+    int mutaDecChannels = inputs[MUTA_DEC_INPUT].getChannels();
+    if (mutaDecChannels > 1) {
+      for (int i = 0; i < mutaDecChannels; i++) {
+        int targetStepIdx = i % NUM_STEPS;
+        if (mutRstTrigger[i].process(inputs[MUTA_DEC_INPUT].getVoltage(i))) {
+          this->resetStepMutation(targetStepIdx);
+        } else if (mutDecTrigger[i].process(inputs[MUTA_DEC_INPUT].getVoltage(i))) {
+          this->mutateStep(targetStepIdx, -0.05f);
+        }
+      }
     } else {
-      phaseq->patternFlashNeg = patternNum;
+      if (mutRstTrigger[0].process(inputs[MUTA_DEC_INPUT].getVoltage())) {
+        this->resetMutation();
+      } else if (mutDecTrigger[0].process(inputs[MUTA_DEC_INPUT].getVoltage())) {
+        this->mutate(-0.05f);
+      }
     }
   }
-
-  void redo() override {
-    app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
-    assert(mw);
-    Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
-    phaseq->patterns[patternNum].steps[step].setAttrBase(attr, newValue);
-    if (phaseq->patternIdx == patternNum) {
-      phaseq->pattern.steps[step].setAttrBase(attr, newValue);
-      mw->module->params[paramId].value = newValue;
+  if (inputs[MUTA_INC_INPUT].isConnected()) {
+    int mutaIncChannels = inputs[MUTA_INC_INPUT].getChannels();
+    if (mutaIncChannels > 1) {
+      for (int i = 0; i < mutaIncChannels; i++) {
+        if (mutIncTrigger[i].process(inputs[MUTA_INC_INPUT].getVoltage(i))) {
+          int targetStepIdx = i % NUM_STEPS;
+          this->mutateStep(targetStepIdx, 0.1f);
+        }
+      }
     } else {
-      phaseq->patternFlashPos = patternNum;
+      if (mutIncTrigger[0].process(inputs[MUTA_INC_INPUT].getVoltage())) {
+        this->mutate(0.1f);
+      }
     }
   }
+}
 
-  PhasequeStepAttrChange() {
-    name = "change step attribute";
+void Phaseque::processPatternButtons() {
+  if (qntTrigger.process(params[QNT_SWITCH_PARAM].getValue())) {
+    lights[QNT_LED].value = 1.1f;
+    pattern.quantize();
+    renderParamQuantities();
+    return;
   }
-};
-
-struct ZZC_PhasequeAttrKnob : ZZC_DisplayKnob {
-  ZZC_PhasequeAttrKnob() {
+  if (shiftLeftTrigger.process(params[SHIFT_LEFT_SWITCH_PARAM].getValue())) {
+    lights[SHIFT_LEFT_LED].value = 1.1f;
+    pattern.shiftLeft();
+    renderParamQuantities();
+    return;
   }
+  if (shiftRightTrigger.process(params[SHIFT_RIGHT_SWITCH_PARAM].getValue())) {
+    lights[SHIFT_RIGHT_LED].value = 1.1f;
+    pattern.shiftRight();
+    renderParamQuantities();
+    return;
+  }
+  if (lenTrigger.process(params[LEN_SWITCH_PARAM].getValue())) {
+    lights[LEN_LED].value = 1.1f;
+    pattern.resetLenghts();
+    renderParamQuantities();
+    return;
+  }
+  if (revTrigger.process(params[REV_SWITCH_PARAM].getValue())) {
+    lights[REV_LED].value = 1.1f;
+    pattern.reverse();
+    renderParamQuantities();
+    return;
+  }
+  if (flipTrigger.process(params[FLIP_SWITCH_PARAM].getValue())) {
+    lights[FLIP_LED].value = 1.1f;
+    pattern.flip();
+    renderParamQuantities();
+    return;
+  }
+}
 
-  void onDragEnd(const event::DragEnd &e) override {
-    if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+void Phaseque::processJumpInputs() {
+  this->jump = false;
+  if (absMode || samplesSinceLastReset < 20) {
+    return;
+  }
+  for (int i = 0; i < NUM_STEPS; i++) {
+    if (inputs[STEP_JUMP_INPUT + i].isConnected() && jumpInputsTriggers[i].process(inputs[STEP_JUMP_INPUT + i].getVoltage())) {
+      jumpToStep(pattern.steps[i]);
+      retrigGapGenerator.trigger(1e-4f);
       return;
-
-    APP->window->cursorUnlock();
-
-    if (paramQuantity) {
-      float newValue = paramQuantity->getSmoothValue();
-      if (oldValue != newValue) {
-        PhasequeStepAttrChange *h = new PhasequeStepAttrChange;
-        h->moduleId = paramQuantity->module->id;
-        h->paramId = paramQuantity->paramId;
-        Phaseque* phaseq = static_cast<Phaseque*>(paramQuantity->module);
-        h->patternNum = phaseq->patternIdx;
-        h->oldValue = oldValue;
-        h->newValue = newValue;
-        StepAttrParamQuantityBase* q = static_cast<StepAttrParamQuantityBase*>(paramQuantity);
-        h->step = q->item;
-        h->name = "change step " + StepAttrNames[q->attr];
-        h->attr = q->attr;
-        APP->history->push(h);
-      }
     }
   }
-};
-
-struct ZZC_PhasequeXYDisplayWidget : XYDisplayWidget {
-  ZZC_PhasequeXYDisplayWidget() {
-  }
-  void onDragEnd(const event::DragEnd &e) override {
-    if (e.button != GLFW_MOUSE_BUTTON_LEFT)
-      return;
-
-    APP->window->cursorUnlock();
-
-    if (paramQuantityX) {
-      float newValueX = paramQuantityX->getValue();
-      if (oldValueX != newValueX) {
-        PhasequeStepAttrChange *h = new PhasequeStepAttrChange;
-        h->moduleId = paramQuantityX->module->id;
-        h->paramId = paramQuantityX->paramId;
-        Phaseque* phaseq = static_cast<Phaseque*>(paramQuantityX->module);
-        h->patternNum = phaseq->patternIdx;
-        h->oldValue = oldValueX;
-        h->newValue = newValueX;
-        StepAttrParamQuantityBase* q = static_cast<StepAttrParamQuantityBase*>(paramQuantityX);
-        h->step = q->item;
-        h->name = "change step " + StepAttrNames[q->attr];
-        h->attr = q->attr;
-        APP->history->push(h);
-      }
+  if (inputs[RND_JUMP_INPUT].isConnected() && rndJumpInputTrigger.process(inputs[RND_JUMP_INPUT].getVoltage())) {
+    int nonMuted[NUM_STEPS];
+    int idx = 0;
+    for (int i = 0; i < NUM_STEPS; i++) {
+      if (!pattern.steps[i].gate ^ !globalGate) { continue; }
+      nonMuted[idx] = i;
+      idx++;
     }
-    if (paramQuantityY) {
-      float newValueY = paramQuantityY->getValue();
-      if (oldValueY != newValueY) {
-        PhasequeStepAttrChange *h = new PhasequeStepAttrChange;
-        h->moduleId = paramQuantityY->module->id;
-        h->paramId = paramQuantityY->paramId;
-        Phaseque* phaseq = static_cast<Phaseque*>(paramQuantityY->module);
-        h->patternNum = phaseq->patternIdx;
-        h->oldValue = oldValueY;
-        h->newValue = newValueY;
-        StepAttrParamQuantityBase* q = static_cast<StepAttrParamQuantityBase*>(paramQuantityY);
-        h->step = q->item;
-        h->name = "change step " + StepAttrNames[q->attr];
-        h->attr = q->attr;
-        APP->history->push(h);
-      }
+    if (idx > 0) {
+      jumpToStep(pattern.steps[nonMuted[(int) (random::uniform() * idx)]]);
+      retrigGapGenerator.trigger(1e-4f);
     }
   }
-};
+}
 
-struct ZZC_PhasequeStepAttrKnob23 : ZZC_PhasequeAttrKnob {
-  ZZC_PhasequeStepAttrKnob23() {
-    setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-27-23-Encoder.svg")));
-    shadow->box.size = Vec(33, 33);
-    shadow->box.pos = Vec(-1.5, 2);
-    shadow->blurRadius = 15.0f;
-    shadow->opacity = 1.0f;
-    recalcSizes();
+void Phaseque::processIndicators() {
+  if (!lightDivider.process()) {
+    return;
   }
-};
 
-struct ZZC_PhasequeStepAttrKnob21 : ZZC_PhasequeAttrKnob {
-  ZZC_PhasequeStepAttrKnob21() {
-    setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-27-21-Encoder.svg")));
-    shadow->box.size = Vec(29, 29);
-    shadow->box.pos = Vec(-0.5, 2);
-    shadow->blurRadius = 15.0f;
-    shadow->opacity = 1.0f;
-    recalcSizes();
-  }
-};
+  lights[GLOBAL_GATE_LED].setBrightness(globalGate);
+  lights[GATE_LIGHT].setBrightness(outputs[GATE_OUTPUT].getVoltageSum() / 10.f);
 
-struct ZZC_PhasequeStepAttrKnob21Uni : ZZC_PhasequeStepAttrKnob21 {
-  ZZC_PhasequeStepAttrKnob21Uni() {
-    unipolar = true;
-  }
-};
+  float v = outputs[V_OUTPUT].getVoltageSum();
+  lights[V_POS_LIGHT].setBrightness(std::max(v * 0.5f, 0.0f));
+  lights[V_NEG_LIGHT].setBrightness(std::max(v * -0.5f, 0.0f));
 
-struct ZZC_PhasequeStepAttrKnob19 : ZZC_PhasequeAttrKnob {
-  ZZC_PhasequeStepAttrKnob19() {
-    setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-27-19-Encoder.svg")));
-    shadow->box.size = Vec(25, 25);
-    shadow->box.pos = Vec(0.5, 2);
-    shadow->blurRadius = 15.0f;
-    shadow->opacity = 1.0f;
-    recalcSizes();
-    disp->enableColor();
+  float shift = outputs[SHIFT_OUTPUT].getVoltageSum() / 5.f;
+  lights[SHIFT_POS_LIGHT].setBrightness(std::max(shift, 0.0f));
+  lights[SHIFT_NEG_LIGHT].setBrightness(std::max(-shift, 0.0f));
+
+  float len = outputs[LEN_OUTPUT].getVoltageSum() / 5.f;
+  lights[LEN_POS_LIGHT].setBrightness(std::max(len, 0.0f));
+  lights[LEN_NEG_LIGHT].setBrightness(std::max(-len, 0.0f));
+
+  float expr = outputs[EXPR_OUTPUT].getVoltageSum() / 5.f;
+  lights[EXPR_POS_LIGHT].setBrightness(std::max(expr, 0.0f));
+  lights[EXPR_NEG_LIGHT].setBrightness(std::max(-expr, 0.0f));
+
+  float curve = outputs[EXPR_CURVE_OUTPUT].getVoltageSum() / 5.f;
+  lights[EXPR_CURVE_POS_LIGHT].setBrightness(std::max(curve, 0.0f));
+  lights[EXPR_CURVE_NEG_LIGHT].setBrightness(std::max(-curve, 0.0f));
+
+  float stepPhase = outputs[PHASE_OUTPUT].getVoltageSum() / 5.f;
+  lights[PHASE_LIGHT].setBrightness(stepPhase);
+}
+
+void Phaseque::triggerIfBetween(float from, float to) {
+  if (!activeStep) {
+    return;
   }
-};
+  for (int i = 0; i < NUM_STEPS; i++) {
+    if (activeStep->idx != i) { continue; }
+    if (!pattern.steps[i].gate ^ !globalGate) { continue; }
+    float retrigWrapped = fastmod(direction == 1 ? pattern.steps[i].in() : pattern.steps[i].out(), 1.0);
+    if (from <= retrigWrapped && retrigWrapped < to) {
+      retrigGapGenerator.trigger(1e-4f);
+      break;
+    }
+  }
+}
+
+void Phaseque::renderStep(Step *step, int channel) {
+  float v = step->attrs[STEP_VALUE].value;
+  float shift = step->attrs[STEP_SHIFT].value / baseStepLen;
+  float len = step->attrs[STEP_LEN].value / baseStepLen - 1.0f;
+  float stepPhase = step->phase(phaseShifted);
+  float expr = step->expr(stepPhase);
+  float curve = step->attrs[STEP_EXPR_CURVE].value;
+
+  outputs[V_OUTPUT].setVoltage(v, channel);
+  outputs[SHIFT_OUTPUT].setVoltage(shift * 5.0f, channel);
+  outputs[LEN_OUTPUT].setVoltage(len * 5.0f, channel);
+  outputs[EXPR_OUTPUT].setVoltage(expr * 5.0f, channel);
+  outputs[EXPR_CURVE_OUTPUT].setVoltage(curve * 5.0f, channel);
+  outputs[PHASE_OUTPUT].setVoltage(stepPhase * 10.0f, channel);
+}
+
+void Phaseque::renderUnison(Step *step, int channel) {
+  float v = step->attrs[STEP_VALUE].base;
+  float shift = step->attrs[STEP_SHIFT].base / baseStepLen;
+  float len = step->attrs[STEP_LEN].base / baseStepLen - 1.0f;
+  float stepPhase = step->phaseBase(phaseShifted);
+  float expr = step->exprBase(stepPhase);
+  float curve = step->attrs[STEP_EXPR_CURVE].base;
+
+  outputs[V_OUTPUT].setVoltage(v, channel);
+  outputs[SHIFT_OUTPUT].setVoltage(shift * 5.0f, channel);
+  outputs[LEN_OUTPUT].setVoltage(len * 5.0f, channel);
+  outputs[EXPR_OUTPUT].setVoltage(expr * 5.0f, channel);
+  outputs[EXPR_CURVE_OUTPUT].setVoltage(curve * 5.0f, channel);
+  outputs[PHASE_OUTPUT].setVoltage(stepPhase * 10.0f, channel);
+}
 
 void Phaseque::process(const ProcessArgs &args) {
   processGlobalParams();
   processPatternNav();
-  processButtons();
-  processPatternButtons();
+  processMutaInputs();
+  if (this->buttonsDivider.process()) {
+    processButtons();
+    processPatternButtons();
+  }
+  return;
 
   // Phase param
   float phaseParamInput = params[PHASE_PARAM].getValue();
@@ -391,7 +462,7 @@ void Phaseque::process(const ProcessArgs &args) {
     resolution = pattern.resolution;
   }
 
-  processJumps();
+  processJumpInputs();
 
   if (resetPulse) {
     phase = 0.0;
@@ -554,7 +625,10 @@ void Phaseque::process(const ProcessArgs &args) {
   outputs[PTRN_START_OUTPUT].setVoltage(ptrnStartPulseGenerator.process(args.sampleTime) ? 10.0f : 0.0f);
   outputs[PTRN_END_OUTPUT].setVoltage(ptrnEndPulseGenerator.process(args.sampleTime) ? 10.0f : 0.0f);
   outputs[PTRN_WRAP_OUTPUT].setVoltage(std::max(outputs[PTRN_START_OUTPUT].value, outputs[PTRN_END_OUTPUT].value));
-  outputs[PTRN_OUTPUT].setVoltage(patternToVolts(patternIdx));
+
+  float voltsForPattern = (patternIdx - 1) * 1.0f / 12.0f;
+  outputs[PTRN_OUTPUT].setVoltage(voltsForPattern);
+
   if (patternIdx != lastPatternIdx) {
     wentPulseGenerator.trigger(1e-3f);
     lastPatternIdx = patternIdx;
@@ -576,15 +650,7 @@ void Phaseque::process(const ProcessArgs &args) {
   if (polyphonyMode == POLYPHONIC || polyphonyMode == UNISON) {
     for (int i = 0; i < NUM_STEPS; i++) {
       if (stepsStates[i]) {
-        renderStep(
-          &pattern.steps[i], i,
-          outputs[V_OUTPUT],
-          outputs[SHIFT_OUTPUT],
-          outputs[LEN_OUTPUT],
-          outputs[EXPR_OUTPUT],
-          outputs[EXPR_CURVE_OUTPUT],
-          outputs[PHASE_OUTPUT]
-        );
+        renderStep(&pattern.steps[i], i);
         outputs[GATE_OUTPUT].setVoltage(clutch ? 10.f : 0.f, i);
         outputs[STEP_GATE_OUTPUT + i].setVoltage(10.f);
         lights[STEP_GATE_LIGHT + i].setBrightness(1.f);
@@ -595,15 +661,7 @@ void Phaseque::process(const ProcessArgs &args) {
       }
       if (polyphonyMode == UNISON) {
         if (unisonStates[i]) {
-          renderUnison(
-            &pattern.steps[i], i + NUM_STEPS,
-            outputs[V_OUTPUT],
-            outputs[SHIFT_OUTPUT],
-            outputs[LEN_OUTPUT],
-            outputs[EXPR_OUTPUT],
-            outputs[EXPR_CURVE_OUTPUT],
-            outputs[PHASE_OUTPUT]
-          );
+          renderUnison(&pattern.steps[i], i + NUM_STEPS);
           outputs[GATE_OUTPUT].setVoltage(clutch ? 10.f : 0.f, i + NUM_STEPS);
           outputs[STEP_GATE_OUTPUT + i].setVoltage(10.f);
           lights[STEP_GATE_LIGHT + i].setBrightness(1.f);
@@ -633,15 +691,7 @@ void Phaseque::process(const ProcessArgs &args) {
     processIndicators();
   } else {
     if (activeStep) {
-      renderStep(
-        activeStep, 0,
-        outputs[V_OUTPUT],
-        outputs[SHIFT_OUTPUT],
-        outputs[LEN_OUTPUT],
-        outputs[EXPR_OUTPUT],
-        outputs[EXPR_CURVE_OUTPUT],
-        outputs[PHASE_OUTPUT]
-      );
+      renderStep(activeStep, 0);
       outputs[GATE_OUTPUT].setChannels(1);
       outputs[V_OUTPUT].setChannels(1);
       outputs[SHIFT_OUTPUT].setChannels(1);
@@ -709,323 +759,6 @@ void Phaseque::process(const ProcessArgs &args) {
     this->mainDisplayConsumer->exprPowerCV = inputs[GLOBAL_EXPR_POWER_INPUT].getVoltage();
     this->mainDisplayConsumer->consumed = false;
   }
-}
-
-struct PhasequeWidget : ModuleWidget {
-  PhasequeWidget(Phaseque *module);
-  void appendContextMenu(Menu *menu) override;
-};
-
-PhasequeWidget::PhasequeWidget(Phaseque *module) {
-  setModule(module);
-  setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/panels/Phaseque.svg")));
-
-  addInput(createInput<ZZC_PJ_Port>(Vec(14, 50), module, Phaseque::CLOCK_INPUT));
-  addChild(createLight<TinyLight<GreenLight>>(Vec(36, 50), module, Phaseque::CLOCK_LED));
-  addParam(createParam<ZZC_LEDBezelDark>(Vec(15.3f, 82.3f), module, Phaseque::TEMPO_TRACK_SWITCH_PARAM));
-  addChild(createLight<LedLight<ZZC_YellowLight>>(Vec(17.1f, 84.0f), module, Phaseque::TEMPO_TRACK_LED));
-  addInput(createInput<ZZC_PJ_Port>(Vec(49, 50), module, Phaseque::VBPS_INPUT));
-  addChild(createLight<TinyLight<GreenLight>>(Vec(71, 50), module, Phaseque::VBPS_LED));
-  addParam(createParam<ZZC_Knob25SnappyNoRand>(Vec(49, 80.8f), module, Phaseque::BPM_PARAM));
-  addInput(createInput<ZZC_PJ_Port>(Vec(84, 50), module, Phaseque::PHASE_INPUT));
-  addChild(createLight<TinyLight<GreenLight>>(Vec(106, 50), module, Phaseque::PHASE_LED));
-  addParam(createParam<ZZC_EncoderKnob>(Vec(258.75f, 49), module, Phaseque::PHASE_PARAM));
-  addParam(createParam<ZZC_LEDBezelDark>(Vec(120.3f, 51.3f), module, Phaseque::ABS_MODE_SWITCH_PARAM));
-  addChild(createLight<LedLight<ZZC_YellowLight>>(Vec(122.1f, 53.0f), module, Phaseque::ABS_MODE_LED));
-
-  Display32Widget *bpmDisplay = new Display32Widget();
-  bpmDisplay->box.pos = Vec(84.0f, 83.0f);
-  bpmDisplay->box.size = Vec(58.0f, 21.0f);
-  if (module) {
-    bpmDisplay->value = &module->bpm;
-    bpmDisplay->disabled = &module->bpmDisabled;
-  }
-  addChild(bpmDisplay);
-
-  addInput(createInput<ZZC_PJ_Port>(Vec(189, 81), module, Phaseque::CLUTCH_INPUT));
-  addParam(createParam<ZZC_LEDBezelDark>(Vec(190.3f, 51.3f), module, Phaseque::CLUTCH_SWITCH_PARAM));
-  addChild(createLight<LedLight<ZZC_YellowLight>>(Vec(192.1f, 53.0f), module, Phaseque::CLUTCH_LED));
-
-  DisplayIntpartWidget *resolutionDisplay = new DisplayIntpartWidget();
-  resolutionDisplay->box.pos = Vec(152, 52);
-  resolutionDisplay->box.size = Vec(29, 21);
-  if (module) {
-    resolutionDisplay->value = &module->resolution;
-  }
-  addChild(resolutionDisplay);
-
-  addParam(createParam<ZZC_PhasequePatternResoKnob>(Vec(154, 80.8f), module, Phaseque::PATTERN_RESO_PARAM));
-
-  addInput(createInput<ZZC_PJ_Port>(Vec(224, 81), module, Phaseque::RESET_INPUT));
-  addParam(createParam<ZZC_LEDBezelDark>(Vec(225.3f, 51.3f), module, Phaseque::RESET_SWITCH_PARAM));
-  addChild(createLight<LedLight<ZZC_YellowLight>>(Vec(227.1f, 53.0f), module, Phaseque::RESET_LED));
-
-  addInput(createInput<ZZC_PJ_Port>(Vec(14, 126), module, Phaseque::GOTO_INPUT));
-  addInput(createInput<ZZC_PJ_Port>(Vec(49, 126), module, Phaseque::PTRN_INPUT));
-  addOutput(createOutput<ZZC_PJ_Port>(Vec(14, 174), module, Phaseque::WENT_OUTPUT));
-  addOutput(createOutput<ZZC_PJ_Port>(Vec(49, 174), module, Phaseque::PTRN_OUTPUT));
-
-  GridDisplayWidget *patternsDisplayDisplay = new GridDisplayWidget();
-  patternsDisplayDisplay->box.pos = Vec(84.0f, 117.0f);
-  patternsDisplayDisplay->setupSize(Vec(165.0f, 85.0f));
-  if (module) {
-    Phaseque *phaseque = dynamic_cast<Phaseque*>(module);
-    assert(phaseque);
-    phaseque->gridDisplayConsumer = patternsDisplayDisplay->consumer;
-    phaseque->gridDisplayProducer = patternsDisplayDisplay->producer;
-  }
-  addChild(patternsDisplayDisplay);
-
-  addOutput(createOutput<ZZC_PJ_Port>(Vec(259, 126), module, Phaseque::PTRN_PHASE_OUTPUT));
-  addOutput(createOutput<ZZC_PJ_Port>(Vec(294, 126), module, Phaseque::PTRN_WRAP_OUTPUT));
-  addOutput(createOutput<ZZC_PJ_Port>(Vec(259, 174), module, Phaseque::PTRN_START_OUTPUT));
-  addOutput(createOutput<ZZC_PJ_Port>(Vec(294, 174), module, Phaseque::PTRN_END_OUTPUT));
-
-  addInput(createInput<ZZC_PJ_Port>(Vec(14, 220), module, Phaseque::PREV_INPUT));
-  addInput(createInput<ZZC_PJ_Port>(Vec(49, 220), module, Phaseque::NEXT_INPUT));
-
-  addInput(createInput<ZZC_PJ_Port>(Vec(84, 220), module, Phaseque::LEFT_INPUT));
-  addInput(createInput<ZZC_PJ_Port>(Vec(119, 220), module, Phaseque::DOWN_INPUT));
-  addInput(createInput<ZZC_PJ_Port>(Vec(154, 220), module, Phaseque::UP_INPUT));
-  addInput(createInput<ZZC_PJ_Port>(Vec(189, 220), module, Phaseque::RIGHT_INPUT));
-  addInput(createInput<ZZC_PJ_Port>(Vec(224, 220), module, Phaseque::SEQ_INPUT));
-
-  addInput(createInput<ZZC_PJ_Port>(Vec(259, 220), module, Phaseque::RND_INPUT));
-
-  addParam(createParam<ZZC_LEDBezelDark>(Vec(295.3f, 221.3f), module, Phaseque::WAIT_SWITCH_PARAM));
-  addChild(createLight<LedLight<ZZC_RedLight>>(Vec(297.1f, 223.0f), module, Phaseque::WAIT_LED));
-
-  MainDisplayWidget *patternDisplay = new MainDisplayWidget();
-  patternDisplay->box.pos = Vec(333.0f, 50.0f);
-  patternDisplay->box.size = Vec(233.0f, 233.0f);
-  patternDisplay->setupSizes();
-  if (module) {
-    Phaseque *phaseque = dynamic_cast<Phaseque*>(module);
-    assert(phaseque);
-    phaseque->mainDisplayConsumer = patternDisplay->consumer;
-    // patternDisplay->resolution = &module->resolution;
-    // patternDisplay->phase = &module->phaseShifted;
-    // patternDisplay->pattern = &module->pattern;
-    // patternDisplay->activeStep = &module->activeStep;
-    // patternDisplay->direction = &module->direction;
-    // patternDisplay->globalGate = &module->globalGate;
-    // patternDisplay->polyphonyMode = &module->polyphonyMode;
-    // patternDisplay->stepsStates = module->stepsStates;
-    // patternDisplay->unisonStates = module->unisonStates;
-  }
-  addChild(patternDisplay);
-
-  addInput(createInput<ZZC_PJ_Port>(Vec(259, 319.75f), module, Phaseque::GLOBAL_GATE_INPUT));
-  addParam(createParam<ZZC_LEDBezelDark>(Vec(260.3f, 278.3f), module, Phaseque::GLOBAL_GATE_SWITCH_PARAM));
-  addChild(createLight<LedLight<ZZC_YellowLight>>(Vec(262.1f, 280.0f), module, Phaseque::GLOBAL_GATE_LED));
-
-  addInput(createInput<ZZC_PJ_Port>(Vec(14, 319.75f), module, Phaseque::GLOBAL_SHIFT_INPUT));
-  addParam(createParam<ZZC_Knob25NoRand>(Vec(14.05f, 276.9f), module, Phaseque::GLOBAL_SHIFT_PARAM));
-
-  addInput(createInput<ZZC_PJ_Port>(Vec(49, 319.75f), module, Phaseque::GLOBAL_LEN_INPUT));
-  addParam(createParam<ZZC_Knob25NoRand>(Vec(49.05f, 276.9f), module, Phaseque::GLOBAL_LEN_PARAM));
-
-  addInput(createInput<ZZC_PJ_Port>(Vec(294, 277), module, Phaseque::GLOBAL_EXPR_CURVE_INPUT));
-  addInput(createInput<ZZC_PJ_Port>(Vec(294, 319.75f), module, Phaseque::GLOBAL_EXPR_POWER_INPUT));
-
-  addParam(createParam<ZZC_LEDBezelDark>(Vec(85.3f, 278.3f), module, Phaseque::QNT_SWITCH_PARAM));
-  addChild(createLight<LedLight<ZZC_YellowLight>>(Vec(87.1f, 280.0f), module, Phaseque::QNT_LED));
-
-  addParam(createParam<ZZC_LEDBezelDark>(Vec(120.3f, 278.3f), module, Phaseque::SHIFT_LEFT_SWITCH_PARAM));
-  addChild(createLight<LedLight<ZZC_YellowLight>>(Vec(122.1f, 280.0f), module, Phaseque::SHIFT_LEFT_LED));
-
-  addParam(createParam<ZZC_PhasequePatternShiftKnob>(Vec(150.5f, 273.5f), module, Phaseque::PATTERN_SHIFT_PARAM));
-
-  addParam(createParam<ZZC_LEDBezelDark>(Vec(190.3f, 278.3f), module, Phaseque::SHIFT_RIGHT_SWITCH_PARAM));
-  addChild(createLight<LedLight<ZZC_YellowLight>>(Vec(192.1f, 280.0f), module, Phaseque::SHIFT_RIGHT_LED));
-
-  addParam(createParam<ZZC_LEDBezelDark>(Vec(225.3f, 278.3f), module, Phaseque::LEN_SWITCH_PARAM));
-  addChild(createLight<LedLight<ZZC_YellowLight>>(Vec(227.1f, 280.0f), module, Phaseque::LEN_LED));
-
-  addParam(createParam<ZZC_LEDBezelDark>(Vec(85.3f, 320.3f), module, Phaseque::REV_SWITCH_PARAM));
-  addChild(createLight<LedLight<ZZC_YellowLight>>(Vec(87.1f, 322.0f), module, Phaseque::REV_LED));
-
-  addInput(createInput<ZZC_PJ_Port>(Vec(119, 319.75f), module, Phaseque::MUTA_DEC_INPUT));
-
-  addParam(createParam<ZZC_PhasequeMutaKnob>(Vec(153, 318), module, Phaseque::PATTERN_MUTA_PARAM));
-
-  addInput(createInput<ZZC_PJ_Port>(Vec(189, 319.75f), module, Phaseque::MUTA_INC_INPUT));
-
-  addParam(createParam<ZZC_LEDBezelDark>(Vec(225.3f, 320.3f), module, Phaseque::FLIP_SWITCH_PARAM));
-  addChild(createLight<LedLight<ZZC_YellowLight>>(Vec(227.1f, 322.0f), module, Phaseque::FLIP_LED));
-
-  addInput(createInput<ZZC_PJ_Port>(Vec(579, 319.75f), module, Phaseque::RND_JUMP_INPUT));
-
-  float stepPeriod = 35.0f;
-  float stepsAreaX = 614.0;
-  for (int i = 0; i < NUM_STEPS; i++) {
-    addParam(createParam<ZZC_PhasequeStepAttrKnob23>(Vec(stepsAreaX + stepPeriod * i - 0.5f, 48), module, Phaseque::STEP_VALUE_PARAM + i));
-    addParam(createParam<ZZC_LEDBezelDark>(Vec(stepsAreaX + 3.3f + stepPeriod * i, 82.3f), module, Phaseque::GATE_SWITCH_PARAM + i));
-    addChild(createLight<LedLight<ZZC_YellowLight>>(Vec(stepsAreaX + 5.1f + stepPeriod * i, 84.0f), module, Phaseque::GATE_SWITCH_LED + i));
-    addParam(createParam<ZZC_PhasequeStepAttrKnob21>(Vec(stepsAreaX + 0.5f + stepPeriod * i, 110.5f), module, Phaseque::STEP_SHIFT_PARAM + i));
-    addParam(createParam<ZZC_PhasequeStepAttrKnob21Uni>(Vec(stepsAreaX + 0.5f + stepPeriod * i, 141.5f), module, Phaseque::STEP_LEN_PARAM + i));
-    addParam(createParam<ZZC_PhasequeStepAttrKnob19>(Vec(stepsAreaX + 1.5f + stepPeriod * i, 176.f), module, Phaseque::STEP_EXPR_IN_PARAM + i));
-
-    ZZC_PhasequeXYDisplayWidget *exprDisplay = new ZZC_PhasequeXYDisplayWidget();
-    exprDisplay->box.pos = Vec(stepsAreaX + 1.0f + stepPeriod * i, 207);
-    exprDisplay->box.size = Vec(27, 27);
-    if (module) {
-      exprDisplay->paramQuantityX = module->paramQuantities[Phaseque::STEP_EXPR_POWER_PARAM + i];
-      exprDisplay->paramQuantityY = module->paramQuantities[Phaseque::STEP_EXPR_CURVE_PARAM + i];
-    }
-    exprDisplay->setupSize();
-    addParam(exprDisplay);
-
-    addParam(createParam<ZZC_PhasequeStepAttrKnob19>(Vec(stepsAreaX + 1.5f + stepPeriod * i, 240.5f), module, Phaseque::STEP_EXPR_OUT_PARAM + i));
-
-    addInput(createInput<ZZC_PJ_Port>(Vec(stepsAreaX + 2.0f + stepPeriod * i, 271), module, Phaseque::STEP_JUMP_INPUT + i));
-    addChild(createLight<SmallLight<GreenLight>>(Vec(stepsAreaX + 11.3f + stepPeriod * i, 301.5f), module, Phaseque::STEP_GATE_LIGHT + i));
-    addOutput(createOutput<ZZC_PJ_Port>(Vec(stepsAreaX + 2.0f + stepPeriod * i, 319.75f), module, Phaseque::STEP_GATE_OUTPUT + i));
-  }
-
-  stepPeriod = 34.0f;
-  float outputsAreaX = 335.0f;
-
-  addOutput(createOutput<ZZC_PJ_Port>(Vec(outputsAreaX + stepPeriod * 0, 319.75f), module, Phaseque::GATE_OUTPUT));
-  addOutput(createOutput<ZZC_PJ_Port>(Vec(outputsAreaX + stepPeriod * 1, 319.75f), module, Phaseque::V_OUTPUT));
-  addOutput(createOutput<ZZC_PJ_Port>(Vec(outputsAreaX + stepPeriod * 2, 319.75f), module, Phaseque::SHIFT_OUTPUT));
-  addOutput(createOutput<ZZC_PJ_Port>(Vec(outputsAreaX + stepPeriod * 3, 319.75f), module, Phaseque::LEN_OUTPUT));
-  addOutput(createOutput<ZZC_PJ_Port>(Vec(outputsAreaX + stepPeriod * 4, 319.75f), module, Phaseque::EXPR_OUTPUT));
-  addOutput(createOutput<ZZC_PJ_Port>(Vec(outputsAreaX + stepPeriod * 5, 319.75f), module, Phaseque::EXPR_CURVE_OUTPUT));
-  addOutput(createOutput<ZZC_PJ_Port>(Vec(outputsAreaX + stepPeriod * 6, 319.75f), module, Phaseque::PHASE_OUTPUT));
-
-  float outputLedsAreaX = 344.3f;
-
-  addChild(createLight<SmallLight<GreenLight>>(Vec(outputLedsAreaX + stepPeriod * 0, 301.5f), module, Phaseque::GATE_LIGHT));
-  addChild(createLight<SmallLight<GreenRedLight>>(Vec(outputLedsAreaX + stepPeriod * 1, 301.5f), module, Phaseque::V_POS_LIGHT));
-  addChild(createLight<SmallLight<GreenRedLight>>(Vec(outputLedsAreaX + stepPeriod * 2, 301.5f), module, Phaseque::SHIFT_POS_LIGHT));
-  addChild(createLight<SmallLight<GreenRedLight>>(Vec(outputLedsAreaX + stepPeriod * 3, 301.5f), module, Phaseque::LEN_POS_LIGHT));
-  addChild(createLight<SmallLight<GreenRedLight>>(Vec(outputLedsAreaX + stepPeriod * 4, 301.5f), module, Phaseque::EXPR_POS_LIGHT));
-  addChild(createLight<SmallLight<GreenRedLight>>(Vec(outputLedsAreaX + stepPeriod * 5, 301.5f), module, Phaseque::EXPR_CURVE_POS_LIGHT));
-  addChild(createLight<SmallLight<GreenLight>>(Vec(outputLedsAreaX + stepPeriod * 6, 301.5f), module, Phaseque::PHASE_LIGHT));
-
-  addChild(createWidget<ZZC_Screw>(Vec(RACK_GRID_WIDTH, 0)));
-  addChild(createWidget<ZZC_Screw>(Vec(box.size.x - 2 * RACK_GRID_WIDTH, 0)));
-  addChild(createWidget<ZZC_Screw>(Vec(RACK_GRID_WIDTH, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));
-  addChild(createWidget<ZZC_Screw>(Vec(box.size.x - 2 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));
-}
-
-struct PhasequeCopyToNextItem : MenuItem {
-  Phaseque *phaseq;
-  void onAction(const event::Action &e) override {
-    phaseq->copyToNext();
-  }
-};
-
-struct PhasequeCopyToPrevItem : MenuItem {
-  Phaseque *phaseq;
-  void onAction(const event::Action &e) override {
-    phaseq->copyToPrev();
-  }
-};
-
-struct PhasequeCopyResoItem : MenuItem {
-  Phaseque *phaseq;
-  void onAction(const event::Action &e) override {
-    phaseq->copyResoToAll();
-  }
-};
-
-struct PhasequeRndAllItem : MenuItem {
-  Phaseque *phaseq;
-  void onAction(const event::Action &e) override {
-    phaseq->randomizeAll();
-  }
-};
-
-struct PhasequeRndAllResoItem : MenuItem {
-  Phaseque *phaseq;
-  void onAction(const event::Action &e) override {
-    phaseq->randomizeAllReso();
-  }
-};
-
-struct PhasequeBakeMutationItem : MenuItem {
-  Phaseque *phaseq;
-  void onAction(const event::Action &e) override {
-    phaseq->bakeMutation();
-  }
-};
-
-struct PhasequeClearPatternItem : MenuItem {
-  Phaseque *phaseq;
-  void onAction(const event::Action &e) override {
-    phaseq->pattern.init();
-  }
-};
-
-struct PolyModeValueItem : MenuItem {
-  Phaseque *module;
-  PolyphonyModes polyMode;
-  void onAction(const event::Action &e) override {
-    module->setPolyMode(polyMode);
-  }
-};
-
-struct PolyModeItem : MenuItem {
-  Phaseque *module;
-  Menu *createChildMenu() override {
-    Menu *menu = new Menu;
-    std::vector<std::string> polyModeNames = {
-      "Monophonic",
-      "Polyphonic 8",
-      "Muta-Unison 16"
-    };
-    for (int i = 0; i < NUM_POLYPHONY_MODES; i++) {
-      PolyphonyModes polyMode = (PolyphonyModes) i;
-      PolyModeValueItem *item = new PolyModeValueItem;
-      item->text = polyModeNames[i];
-      item->rightText = CHECKMARK(module->polyphonyMode == polyMode);
-      item->module = module;
-      item->polyMode = polyMode;
-      menu->addChild(item);
-    }
-    return menu;
-  }
-};
-
-void PhasequeWidget::appendContextMenu(Menu *menu) {
-  menu->addChild(new MenuSeparator());
-
-  Phaseque *phaseq = dynamic_cast<Phaseque*>(module);
-  assert(phaseq);
-
-  PhasequeCopyToNextItem *phaseqCopyToNextItem = createMenuItem<PhasequeCopyToNextItem>("Copy Steps To Next Pattern");
-  PhasequeCopyToPrevItem *phaseqCopyToPrevItem = createMenuItem<PhasequeCopyToPrevItem>("Copy Steps To Prev Pattern");
-  PhasequeCopyResoItem *phaseqCopyResoItem = createMenuItem<PhasequeCopyResoItem>("Copy Reso To All Patterns");
-  PhasequeRndAllItem *phaseqRndAllItem = createMenuItem<PhasequeRndAllItem>("Randomize All Patterns");
-  PhasequeRndAllResoItem *phaseqRndAllResoItem = createMenuItem<PhasequeRndAllResoItem>("Randomize All Resolutions");
-  PhasequeBakeMutationItem *phaseqBakeMutationItem = createMenuItem<PhasequeBakeMutationItem>("Bake Mutation");
-  PhasequeClearPatternItem *phaseqClearPatternItem = createMenuItem<PhasequeClearPatternItem>("Clear Pattern");
-  phaseqCopyToNextItem->phaseq = phaseq;
-  phaseqCopyToPrevItem->phaseq = phaseq;
-  phaseqCopyResoItem->phaseq = phaseq;
-  phaseqRndAllItem->phaseq = phaseq;
-  phaseqRndAllResoItem->phaseq = phaseq;
-  phaseqBakeMutationItem->phaseq = phaseq;
-  phaseqClearPatternItem->phaseq = phaseq;
-  menu->addChild(phaseqCopyToNextItem);
-  menu->addChild(phaseqCopyToPrevItem);
-  menu->addChild(new MenuSeparator());
-  menu->addChild(phaseqCopyResoItem);
-  menu->addChild(new MenuSeparator());
-  menu->addChild(phaseqRndAllItem);
-  menu->addChild(phaseqRndAllResoItem);
-  menu->addChild(new MenuSeparator());
-  menu->addChild(phaseqBakeMutationItem);
-  menu->addChild(new MenuSeparator());
-  menu->addChild(phaseqClearPatternItem);
-  menu->addChild(new MenuSeparator());
-  PolyModeItem *polyModeItem = new PolyModeItem;
-  polyModeItem->text = "Polyphony";
-  polyModeItem->rightText = RIGHT_ARROW;
-  polyModeItem->module = phaseq;
-  menu->addChild(polyModeItem);
 }
 
 Model *modelPhaseque = createModel<Phaseque, PhasequeWidget>("Phaseque");
