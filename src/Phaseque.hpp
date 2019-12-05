@@ -264,10 +264,16 @@ struct Phaseque : Module {
   void processGlobalParams();
   void processPatternNav();
   void processButtons();
+  void processClutchAndReset();
   void processPatternButtons();
   void processMutaInputs();
   void processJumpInputs();
   void processIndicators();
+  bool processPhaseParam(float sampleTime);
+  void findActiveSteps();
+  void feedDisplays();
+
+  void processTransport(bool phaseWasZeroed, float sampleTime);
 
   void triggerIfBetween(float from, float to);
 

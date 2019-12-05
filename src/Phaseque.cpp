@@ -60,12 +60,6 @@ void Phaseque::processGlobalParams() {
 }
 
 void Phaseque::processPatternNav() {
-  if (waitButtonTrigger.process(params[WAIT_SWITCH_PARAM].getValue())) {
-    wait ^= true;
-  }
-  if (this->wait) {
-    lights[WAIT_LED].value = 1.1f;
-  }
   if (this->gridDisplayProducer->hasNextPatternRequest) {
     this->pattern.goTo = this->gridDisplayProducer->nextPatternRequest;
     this->gridDisplayProducer->hasNextPatternRequest = false;
@@ -89,7 +83,7 @@ void Phaseque::processPatternNav() {
   if (inputs[GOTO_INPUT].isConnected()) {
 
     bool ptrnInputIsConnected = inputs[PTRN_INPUT].isConnected();
-    unsigned int target = ptrnInputIsConnected ? ((int) std::floor(inputs[PTRN_INPUT].getVoltage() * 12.f)) % NUM_PATTERNS : 0;
+    unsigned int target = ptrnInputIsConnected ? eucMod((int) std::floor(inputs[PTRN_INPUT].getVoltage() * 12.f), NUM_PATTERNS) : 0;
     if (goToInputTrigger.process(inputs[GOTO_INPUT].getVoltage())) {
       if (ptrnInputIsConnected) {
         if (target != this->patternIdx) {
@@ -214,6 +208,9 @@ void Phaseque::processPatternNav() {
 }
 
 void Phaseque::processButtons() {
+  if (waitButtonTrigger.process(params[WAIT_SWITCH_PARAM].getValue())) {
+    wait ^= true;
+  }
   if (tempoTrackButtonTrigger.process(params[TEMPO_TRACK_SWITCH_PARAM].getValue())) {
     tempoTrack ^= true;
     lights[TEMPO_TRACK_LED].value = tempoTrack ? 1.0f : 0.0f;
@@ -222,9 +219,19 @@ void Phaseque::processButtons() {
     absMode ^= true;
     lights[ABS_MODE_LED].value = absMode ? 1.0f : 0.0f;
   }
+  for (int i = 0; i < NUM_STEPS; i++) {
+    if (gateButtonsTriggers[i].process(params[GATE_SWITCH_PARAM + i].getValue())) {
+      pattern.steps[i].gate ^= true;
+    }
+  }
+  if (globalGateButtonTrigger.process(params[GLOBAL_GATE_SWITCH_PARAM].getValue())) {
+    globalGateInternal ^= true;
+  }
+}
+
+void Phaseque::processClutchAndReset() {
   if (clutchButtonTrigger.process(params[CLUTCH_SWITCH_PARAM].getValue()) || (inputs[CLUTCH_INPUT].isConnected() && clutchInputTrigger.process(inputs[CLUTCH_INPUT].getVoltage()))) {
     clutch ^= true;
-    lights[CLUTCH_LED].value = clutch ? 1.0f : 0.0f;
   }
   resetPulse = resetButtonTrigger.process(params[RESET_SWITCH_PARAM].getValue()) || (inputs[RESET_INPUT].isConnected() && resetInputTrigger.process(inputs[RESET_INPUT].getVoltage()));
   if (resetPulse) {
@@ -236,16 +243,9 @@ void Phaseque::processButtons() {
       samplesSinceLastReset = 384000;
     }
   }
+
   if (resetPulse) {
     lights[RESET_LED].value = 1.1f;
-  }
-  for (int i = 0; i < NUM_STEPS; i++) {
-    if (gateButtonsTriggers[i].process(params[GATE_SWITCH_PARAM + i].getValue())) {
-      pattern.steps[i].gate ^= true;
-    }
-  }
-  if (globalGateButtonTrigger.process(params[GLOBAL_GATE_SWITCH_PARAM].getValue())) {
-    globalGateInternal ^= true;
   }
 }
 
@@ -357,6 +357,16 @@ void Phaseque::processIndicators() {
     return;
   }
 
+  if (this->wait) {
+    lights[WAIT_LED].value = 1.1f;
+  }
+
+  lights[CLUTCH_LED].value = this->clutch ? 1.f : 0.f;
+
+  lights[PHASE_LED].setBrightness(inputs[PHASE_INPUT].isConnected());
+  lights[CLOCK_LED].setBrightness(inputs[CLOCK_INPUT].isConnected());
+  lights[VBPS_LED].setBrightness(inputs[VBPS_INPUT].isConnected() && !inputs[PHASE_INPUT].isConnected());
+
   lights[GLOBAL_GATE_LED].setBrightness(globalGate);
   lights[GATE_LIGHT].setBrightness(outputs[GATE_OUTPUT].getVoltageSum() / 10.f);
 
@@ -431,39 +441,21 @@ void Phaseque::renderUnison(Step *step, int channel) {
   outputs[PHASE_OUTPUT].setVoltage(stepPhase * 10.0f, channel);
 }
 
-void Phaseque::process(const ProcessArgs &args) {
-  processGlobalParams();
-  processPatternNav();
-  processMutaInputs();
-  if (this->buttonsDivider.process()) {
-    processButtons();
-    processPatternButtons();
-  }
-  return;
-
-  // Phase param
+bool Phaseque::processPhaseParam(float sampleTime) {
   float phaseParamInput = params[PHASE_PARAM].getValue();
-  bool phaseWasZeroed = false;
   if (phaseParamInput != phaseParam) {
-    if (phaseParamInput == 0.0f || (lastPhaseParamInput < 0.1f && phaseParamInput > 0.9f) || (lastPhaseParamInput > 0.9f && phaseParamInput < 0.1f)) {
-      if (phaseParamInput == 0.0f) {
-        phaseWasZeroed = true;
-      }
-      phaseParam = phaseParamInput;
+    bool flipped = std::abs(phaseParamInput - lastPhaseParamInput) > 0.9;
+    if (phaseParamInput == 0.f || flipped) {
+      phaseParam = phaseParamInput; // No smoothing
     } else {
       float delta = phaseParamInput - phaseParam;
-      phaseParam = phaseParam + delta * args.sampleTime * 50.0f; // Smoothing
+      phaseParam = phaseParam + delta * sampleTime * 50.0f; // Smoothing
     }
   }
+  return phaseParamInput == 0.f;
+}
 
-  if (absMode) {
-    resolution = 1.0;
-  } else {
-    resolution = pattern.resolution;
-  }
-
-  processJumpInputs();
-
+void Phaseque::processTransport(bool phaseWasZeroed, float sampleTime) {
   if (resetPulse) {
     phase = 0.0;
     phaseWasZeroed = true;
@@ -526,7 +518,6 @@ void Phaseque::process(const ProcessArgs &args) {
       tempoTracker.reset();
     }
     float currentStep = floorf(phase * resolution);
-    float sampleTime = args.sampleTime;
     if (clockTrigger.process(inputs[CLOCK_INPUT].getVoltage()) && samplesSinceLastReset > 19) {
       tempoTracker.tick(sampleTime);
       if (clutch) {
@@ -552,7 +543,7 @@ void Phaseque::process(const ProcessArgs &args) {
       } else {
         bps = params[BPM_PARAM].getValue() / 60.0f;
       }
-      float nextPhase = fastmod(phase + bps * args.sampleTime / resolution, 1.0f);
+      float nextPhase = fastmod(phase + bps * sampleTime / resolution, 1.0f);
       float nextStep = floorf(nextPhase * resolution);
       if (clutch) {
         if (nextStep == currentStep || (bps < 0.0f && (tickedAtLastSample || resetPulse))) {
@@ -565,7 +556,7 @@ void Phaseque::process(const ProcessArgs &args) {
     bpmDisabled = false;
     bps = inputs[VBPS_INPUT].getVoltage();
     if (clutch) {
-      float nextPhase = fastmod(phase + bps * args.sampleTime / resolution, 1.0f);
+      float nextPhase = fastmod(phase + bps * sampleTime / resolution, 1.0f);
       phase = nextPhase;
     }
   }
@@ -602,14 +593,16 @@ void Phaseque::process(const ProcessArgs &args) {
   } else if (phaseShifted > 0.95f && lastPhaseShifted < 0.05f) {
     ptrnStartPulseGenerator.trigger(1e-3f);
   }
+}
 
-  if (polyphonyMode == POLYPHONIC) {
-    activeStep = nullptr;
-    pattern.updateStepsStates(phaseShifted, globalGate, stepsStates, false);
-  } else if (polyphonyMode == UNISON) {
-    activeStep = nullptr;
-    pattern.updateStepsStates(phaseShifted, globalGate, stepsStates, false);
-    pattern.updateStepsStates(phaseShifted, globalGate, unisonStates, true);
+void Phaseque::findActiveSteps() {
+  if (this->polyphonyMode == PolyphonyModes::POLYPHONIC) {
+    this->activeStep = nullptr;
+    this->pattern.updateStepsStates(phaseShifted, globalGate, stepsStates, false);
+  } else if (polyphonyMode == PolyphonyModes::UNISON) {
+    this->activeStep = nullptr;
+    this->pattern.updateStepsStates(phaseShifted, globalGate, stepsStates, false);
+    this->pattern.updateStepsStates(phaseShifted, globalGate, unisonStates, true);
   } else {
     activeStep = pattern.getStepForPhase(phaseShifted, globalGate);
     for (int i = 0; i < NUM_STEPS; i++) {
@@ -617,13 +610,71 @@ void Phaseque::process(const ProcessArgs &args) {
       unisonStates[i] = false;
     }
   }
+}
+
+void Phaseque::feedDisplays() {
+  if (this->gridDisplayConsumer->consumed) {
+    this->gridDisplayConsumer->currentPattern = this->patternIdx;
+    this->gridDisplayConsumer->currentPatternGoTo = this->pattern.goTo;
+    this->gridDisplayConsumer->consumed = false;
+    for (unsigned int i = 0; i < NUM_PATTERNS; i++) {
+      this->gridDisplayConsumer->dirtyMask.set(i, this->patterns[i].hasCustomSteps());
+    }
+  }
+  if (this->mainDisplayConsumer->consumed) {
+    this->mainDisplayConsumer->resolution = this->pattern.resolution;
+    this->mainDisplayConsumer->phase = this->phaseShifted;
+    this->mainDisplayConsumer->direction = this->direction;
+    this->mainDisplayConsumer->pattern = this->pattern;
+    this->mainDisplayConsumer->globalGate = this->globalGate;
+    this->mainDisplayConsumer->polyphonyMode = this->polyphonyMode;
+    std::memcpy(this->mainDisplayConsumer->stepsStates, this->stepsStates, sizeof(this->stepsStates));
+    std::memcpy(this->mainDisplayConsumer->unisonStates, this->unisonStates, sizeof(this->unisonStates));
+    this->mainDisplayConsumer->globalShift = this->globalShift;
+    this->mainDisplayConsumer->globalLen = this->globalLen;
+    if (this->activeStep) {
+      this->mainDisplayConsumer->activeStep = *this->activeStep;
+      this->mainDisplayConsumer->hasActiveStep = true;
+    } else {
+      this->mainDisplayConsumer->hasActiveStep = false;
+    }
+    this->mainDisplayConsumer->exprCurveCV = inputs[GLOBAL_EXPR_CURVE_INPUT].getVoltage();
+    this->mainDisplayConsumer->exprPowerCV = inputs[GLOBAL_EXPR_POWER_INPUT].getVoltage();
+    this->mainDisplayConsumer->consumed = false;
+  }
+}
+
+void Phaseque::process(const ProcessArgs &args) {
+  float sampleTime = args.sampleTime;
+  this->processGlobalParams();
+  this->processPatternNav();
+  this->processMutaInputs();
+  if (this->buttonsDivider.process()) {
+    this->processButtons();
+    this->processPatternButtons();
+  }
+  this->processClutchAndReset();
+
+  // Phase param
+  bool phaseWasZeroed = this->processPhaseParam(sampleTime);
+
+  if (absMode) {
+    resolution = 1.0;
+  } else {
+    resolution = pattern.resolution;
+  }
+
+  this->processJumpInputs();
+  this->processTransport(phaseWasZeroed, sampleTime);
+  this->findActiveSteps();
+
   if ((activeStep && lastActiveStep) && activeStep != lastActiveStep) {
     retrigGapGenerator.trigger(1e-4f);
   }
   lastActiveStep = activeStep;
 
-  outputs[PTRN_START_OUTPUT].setVoltage(ptrnStartPulseGenerator.process(args.sampleTime) ? 10.0f : 0.0f);
-  outputs[PTRN_END_OUTPUT].setVoltage(ptrnEndPulseGenerator.process(args.sampleTime) ? 10.0f : 0.0f);
+  outputs[PTRN_START_OUTPUT].setVoltage(ptrnStartPulseGenerator.process(sampleTime) ? 10.0f : 0.0f);
+  outputs[PTRN_END_OUTPUT].setVoltage(ptrnEndPulseGenerator.process(sampleTime) ? 10.0f : 0.0f);
   outputs[PTRN_WRAP_OUTPUT].setVoltage(std::max(outputs[PTRN_START_OUTPUT].value, outputs[PTRN_END_OUTPUT].value));
 
   float voltsForPattern = (patternIdx - 1) * 1.0f / 12.0f;
@@ -633,13 +684,13 @@ void Phaseque::process(const ProcessArgs &args) {
     wentPulseGenerator.trigger(1e-3f);
     lastPatternIdx = patternIdx;
   }
-  outputs[WENT_OUTPUT].setVoltage(wentPulseGenerator.process(args.sampleTime) ? 10.0f : 0.0f);
+  outputs[WENT_OUTPUT].setVoltage(wentPulseGenerator.process(sampleTime) ? 10.0f : 0.0f);
 
   if (resetPulse && !absMode) {
     retrigGapGenerator.trigger(1e-4f);
   }
 
-  retrigGap = retrigGapGenerator.process(args.sampleTime);
+  retrigGap = retrigGapGenerator.process(sampleTime);
   if (polyphonyMode == MONOPHONIC) {
     if (retrigGap || !clutch) {
       outputs[GATE_OUTPUT].setVoltage(0.0f);
@@ -688,7 +739,6 @@ void Phaseque::process(const ProcessArgs &args) {
       outputs[PHASE_OUTPUT].setChannels(NUM_STEPS);
     }
 
-    processIndicators();
   } else {
     if (activeStep) {
       renderStep(activeStep, 0);
@@ -700,29 +750,24 @@ void Phaseque::process(const ProcessArgs &args) {
       outputs[EXPR_CURVE_OUTPUT].setChannels(1);
       outputs[PHASE_OUTPUT].setChannels(1);
 
-      processIndicators();
-
       for (int i = 0; i < NUM_STEPS; i++) {
-        outputs[STEP_GATE_OUTPUT + i].setVoltage(activeStep->idx == i ? 10.0f : 0.0f);
-        lights[STEP_GATE_LIGHT + i].setBrightness(activeStep->idx == i ? 1.0f : 0.0f);
+        outputs[STEP_GATE_OUTPUT + i].setVoltage(activeStep->idx == i ? 10.f : 0.f);
+        lights[STEP_GATE_LIGHT + i].setBrightness(activeStep->idx == i ? 1.f : 0.f);
       }
     } else {
       for (int i = 0; i < NUM_STEPS; i++) {
-        outputs[STEP_GATE_OUTPUT + i].setVoltage(0.0f);
-        lights[STEP_GATE_LIGHT + i].setBrightness(0.0f);
+        outputs[STEP_GATE_OUTPUT + i].setVoltage(0.f);
+        lights[STEP_GATE_LIGHT + i].setBrightness(0.f);
       }
     }
   }
+  this->processIndicators();
 
-  outputs[PTRN_PHASE_OUTPUT].setVoltage(phaseShifted * 10.0f);
+  outputs[PTRN_PHASE_OUTPUT].setVoltage(phaseShifted * 10.f);
 
   for (int i = 0; i < NUM_STEPS; i++) {
     lights[GATE_SWITCH_LED + i].setBrightness(pattern.steps[i].gate ^ !globalGate);
   }
-
-  lights[PHASE_LED].setBrightness(inputs[PHASE_INPUT].isConnected());
-  lights[CLOCK_LED].setBrightness(inputs[CLOCK_INPUT].isConnected());
-  lights[VBPS_LED].setBrightness(inputs[VBPS_INPUT].isConnected() && !inputs[PHASE_INPUT].isConnected());
 
   lastPhase = phase;
   lastPhaseInState = inputs[PHASE_INPUT].isConnected();
@@ -730,35 +775,7 @@ void Phaseque::process(const ProcessArgs &args) {
   lastPhaseParamInput = params[PHASE_PARAM].getValue();
   lastClockInputState = inputs[CLOCK_INPUT].isConnected();
 
-  if (this->gridDisplayConsumer->consumed && this->gridDisplayConsumer->currentPattern != this->patternIdx) {
-    this->gridDisplayConsumer->currentPattern = this->patternIdx;
-    this->gridDisplayConsumer->currentPatternGoTo = this->pattern.goTo;
-    this->gridDisplayConsumer->consumed = false;
-    for (unsigned int i = 0; i < NUM_PATTERNS; i++) {
-      this->gridDisplayConsumer->dirtyMask.set(i, this->patterns[i].hasCustomSteps());
-    }
-  }
-  if (this->mainDisplayConsumer->consumed) {
-    this->mainDisplayConsumer->resolution = this->pattern.resolution;
-    this->mainDisplayConsumer->phase = this->phaseShifted;
-    this->mainDisplayConsumer->direction = this->direction;
-    this->mainDisplayConsumer->pattern = this->pattern;
-    this->mainDisplayConsumer->globalGate = this->globalGate;
-    this->mainDisplayConsumer->polyphonyMode = this->polyphonyMode;
-    std::memcpy(this->mainDisplayConsumer->stepsStates, this->stepsStates, sizeof(this->stepsStates));
-    std::memcpy(this->mainDisplayConsumer->unisonStates, this->unisonStates, sizeof(this->unisonStates));
-    this->mainDisplayConsumer->globalShift = this->globalShift;
-    this->mainDisplayConsumer->globalLen = this->globalLen;
-    if (this->activeStep) {
-      this->mainDisplayConsumer->activeStep = *this->activeStep;
-      this->mainDisplayConsumer->hasActiveStep = true;
-    } else {
-      this->mainDisplayConsumer->hasActiveStep = false;
-    }
-    this->mainDisplayConsumer->exprCurveCV = inputs[GLOBAL_EXPR_CURVE_INPUT].getVoltage();
-    this->mainDisplayConsumer->exprPowerCV = inputs[GLOBAL_EXPR_POWER_INPUT].getVoltage();
-    this->mainDisplayConsumer->consumed = false;
-  }
+  this->feedDisplays();
 }
 
 Model *modelPhaseque = createModel<Phaseque, PhasequeWidget>("Phaseque");
