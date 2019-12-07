@@ -2,254 +2,225 @@
 #include "ZZC.hpp"
 #include "Step.hpp"
 
+
+template <unsigned int SIZE, unsigned int BLOCK_SIZE>
 struct Pattern {
-  float resolution = 8.0f;
+  /* Pattern settings */
+  unsigned int resolution = SIZE;
   unsigned int goTo = 0;
-  float shift = 0.0f;
-  Step steps[NUM_STEPS];
-  float *globalShiftPtr = nullptr;
-  float *globalLenPtr = nullptr;
+  float shift = 0.f;
+
+  /* Step attributes, mutations and gates */
+  simd::Vector<float, BLOCK_SIZE> stepBases[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE];
+  simd::Vector<float, BLOCK_SIZE> stepMutas[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE];
+  simd::Vector<float, BLOCK_SIZE> stepGates[SIZE / BLOCK_SIZE];
+
+  const float stepAttrDefaults[STEP_ATTRS_TOTAL] = {
+    simd::Vector<float, BLOCK_SIZE>(0.f),
+    simd::Vector<float, BLOCK_SIZE>(1.f / SIZE),
+    simd::Vector<float, BLOCK_SIZE>(0.f),
+    simd::Vector<float, BLOCK_SIZE>(0.f),
+    simd::Vector<float, BLOCK_SIZE>(0.f),
+    simd::Vector<float, BLOCK_SIZE>(0.f),
+    simd::Vector<float, BLOCK_SIZE>(0.f),
+  };
 
   json_t *dataToJson() {
     json_t *patternJ = json_object();
-    json_object_set_new(patternJ, "resolution", json_real(resolution));
-    json_object_set_new(patternJ, "goTo", json_real(goTo));
+    json_object_set_new(patternJ, "resolution", json_integer(resolution));
+    json_object_set_new(patternJ, "goTo", json_integer(goTo));
     json_object_set_new(patternJ, "shift", json_real(shift));
     json_t *stepsJ = json_array();
-    for (int i = 0; i < NUM_STEPS; i++) {
-      json_array_append(stepsJ, steps[i].dataToJson());
+    for (unsigned int stepIdx = 0; stepIdx < SIZE; stepIdx++) {
+      unsigned int blockIdx = stepIdx / BLOCK_SIZE;
+      unsigned int stepInBlockIdx = stepIdx % BLOCK_SIZE;
+
+      json_t *stepJ = json_object();
+      json_object_set_new(stepJ, "gate", json_boolean(
+        this->stepGates[blockIdx][stepInBlockIdx] == 0xFFFFFFFF
+      ));
+      json_t *attrsJ = json_array();
+      for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
+        json_t *attrJ = json_object();
+        json_object_set_new(attrJ, "base", json_real(
+          this->stepBases[attrIdx][blockIdx][stepInBlockIdx]
+        ));
+        json_object_set_new(attrJ, "mutation", json_real(
+          this->stepMutas[attrIdx][blockIdx][stepInBlockIdx]
+        ));
+        json_array_append(attrsJ, attrJ);
+      }
+      json_object_set_new(stepJ, "attrs", attrsJ);
+      json_array_append(stepsJ, stepJ);
     }
     json_object_set_new(patternJ, "steps", stepsJ);
     return patternJ;
   }
 
   void dataFromJson(json_t *patternJ) {
-    resolution = json_number_value(json_object_get(patternJ, "resolution"));
-    goTo = json_number_value(json_object_get(patternJ, "goTo"));
-    shift = json_number_value(json_object_get(patternJ, "shift"));
+    this->resolution = json_number_value(json_object_get(patternJ, "resolution"));
+    this->goTo = json_number_value(json_object_get(patternJ, "goTo"));
+    this->shift = json_number_value(json_object_get(patternJ, "shift"));
     json_t *stepsJ = json_object_get(patternJ, "steps");
-    for (int i = 0; i < NUM_STEPS; i++) {
-      json_t *stepJ = json_array_get(stepsJ, i);
-      steps[i].dataFromJson(stepJ);
+    for (unsigned int stepIdx = 0; stepIdx < SIZE; stepIdx++) {
+      unsigned int blockIdx = stepIdx / BLOCK_SIZE;
+      unsigned int stepInBlockIdx = stepIdx % BLOCK_SIZE;
+
+      json_t *stepJ = json_array_get(stepsJ, stepIdx);
+      bool gate = json_boolean_value(json_object_get(stepJ, "gate"));
+      this->stepGates[blockIdx][stepInBlockIdx] = gate ? 0xFFFFFFFF : 0x0;
+      json_t *attrsJ = json_object_get(stepJ, "attrs");
+      for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
+        json_t *attrJ = json_array_get(attrsJ, attrIdx);
+        this->stepBases[attrIdx][blockIdx][stepInBlockIdx] = json_number_value(json_object_get(attrJ, "base"));
+        this->stepMutas[attrIdx][blockIdx][stepInBlockIdx] = json_number_value(json_object_get(attrJ, "mutation"));
+      }
     }
   }
 
   bool isClean() {
-    if (resolution != 8.0f || goTo != 1.0f || shift != 0.0f) {
+    if (resolution != 8 || goTo != 1 || shift != 0.f) {
       return false;
     }
-    for (int i = 0; i < NUM_STEPS; i++) {
-      if (!steps[i].isClean) {
-        return false;
+    for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
+      for (unsigned int blockIdx = 0; blockIdx  < SIZE / BLOCK_SIZE; blockIdx++) {
+        if (this->stepBases[attrIdx][blockIdx].v != this->stepAttrDefaults[attrIdx].v ||
+            this->stepMutas[attrIdx][blockIdx] != 0.f) {
+          return false;
+        }
       }
     }
     return true;
   }
 
   bool hasCustomSteps() {
-    for (int i = 0; i < NUM_STEPS; i++) {
-      if (!steps[i].isClean) {
-        return true;
+    for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
+      for (unsigned int blockIdx = 0; blockIdx  < SIZE / BLOCK_SIZE; blockIdx++) {
+        if (this->stepBases[attrIdx][blockIdx].v != this->stepAttrDefaults[attrIdx].v ||
+            this->stepMutas[attrIdx][blockIdx] != 0.f) {
+          return true;
+        }
       }
     }
     return false;
   }
 
   Pattern() {
-    init();
-    refreshPointers(nullptr, nullptr, nullptr, nullptr);
+    this->init();
   }
+
   void init() {
-    this->resolution = 8.0f;
-    this->shift = 0.0f;
-    for (int i = 0; i < NUM_STEPS; i++) {
-      this->steps[i].init(i);
-    }
-  }
-  void refreshPointers(float *globalShiftPtr, float *globalLenPtr,
-                       rack::engine::Port *exprCurveInputPtr, rack::engine::Port *exprPowerInputPtr) {
-    this->globalShiftPtr = globalShiftPtr;
-    this->globalLenPtr = globalLenPtr;
-    for (int i = 0; i < NUM_STEPS; i++) {
-      this->steps[i].patternShift = &shift;
-      if (globalShiftPtr) { this->steps[i].globalShift = globalShiftPtr; }
-      if (globalLenPtr) { this->steps[i].globalLen = globalLenPtr; }
-      if (exprCurveInputPtr) { this->steps[i].exprCurvePort = exprCurveInputPtr; }
-      if (exprPowerInputPtr) { this->steps[i].exprPowerPort = exprPowerInputPtr; }
+    this->resolution = SIZE;
+    this->shift = 0.f;
+    for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
+      for (unsigned int blockIdx = 0; blockIdx  < SIZE / BLOCK_SIZE; blockIdx++) {
+        this->stepBases[attrIdx][blockIdx] = this->stepAttrDefaults[attrIdx];
+        this->stepMutas[attrIdx][blockIdx] = 0.f;
+      }
     }
   }
 
   void randomize() {
-		for (int i = 0; i < NUM_STEPS; i++) {
-      this->steps[i].randomize();
-		}
+    // TODO: Implement this
   }
 
   void randomizeReso() {
-    this->resolution = roundf(1.0f + random::uniform() * 98.0f);
-  }
-
-  // // Slow implementation
-  // Step* getStepForPhase(float phase, bool globalGate) {
-  //   Step* step = nullptr;
-  //   float bestDist = 10.0f;
-  //   for (int i = 0; i < NUM_STEPS; i++) {
-  //     Step* curStep = &steps[i];
-  //     if (!curStep->gate ^ !globalGate) { continue; }
-  //     float eucIn = fastmod(curStep->in(), 1.0f);
-  //     float eucOut = fastmod(curStep->out(), 1.0f);
-  //     if (((eucIn < eucOut) ^ !((phase >= eucIn) ^ (phase < eucOut)))) { continue; }
-  //     float delta = phase - 0.5f;
-  //     float in = fastmod(eucIn - delta, 1.0f);
-  //     float dist = fabsf(0.5f - in);
-  //     if (dist > bestDist) { continue; }
-  //     step = curStep;
-  //     bestDist = dist;
-  //   }
-  //   return step;
-  // }
-
-  Step* getStepForPhase(float phase, bool globalGate) {
-    Step* step = nullptr;
-    float localShift = shift + *globalShiftPtr;
-    float localLen = *globalLenPtr;
-    float prePhase = phase - 1.0f;
-    float postPhase = phase + 1.0f;
-    float bestRating = 10.0f;
-
-    for (int i = 0; i < NUM_STEPS; i++) {
-      Step* curStep = &steps[i];
-      if (!curStep->gate ^ !globalGate) { continue; }
-      float stepIn = curStep->in_ + curStep->attrs[STEP_SHIFT].value + localShift;
-      float stepOut = stepIn + curStep->attrs[STEP_LEN].value * localLen;
-      float rating = 10.0f;
-
-      if (stepIn <= phase && phase < stepOut) {
-        rating = phase - stepIn;
-      } else if (stepIn <= prePhase && prePhase < stepOut) {
-        rating = prePhase - stepIn;
-      } else if (stepIn <= postPhase && postPhase < stepOut) {
-        rating = postPhase - stepIn;
-      } else {
-        continue;
-      }
-
-      if (rating < bestRating) {
-        bestRating = rating;
-        step = curStep;
-      }
-    }
-
-    return step;
-  }
-
-  void updateStepsStates(float phase, bool globalGate, bool *states, bool unison) {
-    float localShift = shift + *globalShiftPtr;
-    float localLen = *globalLenPtr;
-    float prePhase = phase - 1.0f;
-    float postPhase = phase + 1.0f;
-
-    for (int i = 0; i < NUM_STEPS; i++) {
-      Step* curStep = &steps[i];
-      if (!curStep->gate ^ !globalGate) {
-        states[i] = false;
-        continue;
-      }
-      float stepIn = curStep->in_ + (unison ? curStep->attrs[STEP_SHIFT].base : curStep->attrs[STEP_SHIFT].value) + localShift;
-      float stepOut = stepIn + (unison ? curStep->attrs[STEP_LEN].base : curStep->attrs[STEP_LEN].value) * localLen;
-
-      if (stepIn <= phase && phase < stepOut) {
-        states[i] = true;
-      } else if (stepIn <= prePhase && prePhase < stepOut) {
-        states[i] = true;
-      } else if (stepIn <= postPhase && postPhase < stepOut) {
-        states[i] = true;
-      } else {
-        states[i] = false;
-      }
-    }
+    this->resolution = 1 + std::round(99 * random::uniform());
   }
 
   void quantize() {
-    for (int i = 0; i < NUM_STEPS; i++) {
-      this->steps[i].quantize();
-    }
-    this->shift = 0.0f;
+    // TODO: Implement this
+    // for (int i = 0; i < NUM_STEPS; i++) {
+    //   this->steps[i].quantize();
+    // }
+    // this->shift = 0.f;
   }
+
   void shiftLeft() {
-    std::rotate(&this->steps[0], &this->steps[1], &this->steps[NUM_STEPS]);
-    for (int i = 0; i < NUM_STEPS; i++) {
-      this->steps[i].in_ = fastmod(this->steps[i].in_ - baseStepLen, 1.0f);
-      this->steps[i].idx = eucMod(this->steps[i].idx - 1, NUM_STEPS);
-    }
+    // TODO: Implement this
+    // std::rotate(&this->steps[0], &this->steps[1], &this->steps[NUM_STEPS]);
+    // for (int i = 0; i < NUM_STEPS; i++) {
+    //   this->steps[i].in_ = fastmod(this->steps[i].in_ - baseStepLen, 1.0f);
+    //   this->steps[i].idx = eucMod(this->steps[i].idx - 1, NUM_STEPS);
+    // }
   }
+
   void shiftRight() {
-    std::rotate(&this->steps[0], &this->steps[NUM_STEPS - 1], &this->steps[NUM_STEPS]);
-    for (int i = 0; i < NUM_STEPS; i++) {
-      this->steps[i].in_ = fastmod(this->steps[i].in_ + baseStepLen, 1.0f);
-      this->steps[i].idx = eucMod(this->steps[i].idx + 1, NUM_STEPS);
-    }
+    // TODO: Implement this
+    // std::rotate(&this->steps[0], &this->steps[NUM_STEPS - 1], &this->steps[NUM_STEPS]);
+    // for (int i = 0; i < NUM_STEPS; i++) {
+    //   this->steps[i].in_ = fastmod(this->steps[i].in_ + baseStepLen, 1.0f);
+    //   this->steps[i].idx = eucMod(this->steps[i].idx + 1, NUM_STEPS);
+    // }
   }
+
   void resetLenghts() {
-    for (int i = 0; i < NUM_STEPS; i++) {
-      this->steps[i].resetLength();
+    for (unsigned int blockIdx = 0; blockIdx  < SIZE / BLOCK_SIZE; blockIdx++) {
+      this->stepBases[StepAttr::STEP_LEN][blockIdx] = this->stepAttrDefaults[StepAttr::STEP_LEN];
     }
   }
+
   void mutate(float factor) {
-    for (int i = 0; i < NUM_STEPS; i++) {
-      this->steps[i].mutate(factor);
-    }
+    // TODO: Implement this
+    // for (int i = 0; i < NUM_STEPS; i++) {
+    //   this->steps[i].mutate(factor);
+    // }
   }
   void scaleMutation(float factor) {
-    for (int i = 0; i < NUM_STEPS; i++) {
-      this->steps[i].scaleMutation(factor);
-    }
+    // TODO: Implement this
+    // for (int i = 0; i < NUM_STEPS; i++) {
+    //   this->steps[i].scaleMutation(factor);
+    // }
   }
   void resetMutation() {
-    for (int i = 0; i < NUM_STEPS; i++) {
-      this->steps[i].resetMutation();
-    }
+    // TODO: Implement this
+    // for (int i = 0; i < NUM_STEPS; i++) {
+    //   this->steps[i].resetMutation();
+    // }
   }
   void reverse() {
-    Step reversed[NUM_STEPS];
-    for (int i = 0; i < NUM_STEPS; i++) {
-      Step orig = this->steps[NUM_STEPS - i - 1];
-      reversed[i] = orig;
-      reversed[i].idx = i;
-      reversed[i].updateIn();
-      float newShiftBase = baseStepLen - orig.attrs[STEP_LEN].base - orig.attrs[STEP_SHIFT].base;
-      float newShiftMut = -orig.attrs[STEP_LEN].mutation - orig.attrs[STEP_SHIFT].mutation;
-      reversed[i].attrs[STEP_SHIFT].setBase(newShiftBase);
-      reversed[i].attrs[STEP_SHIFT].setMutation(newShiftMut);
-      reversed[i].attrs[STEP_SHIFT].applyMutation();
-      reversed[i].attrs[STEP_EXPR_IN] = orig.attrs[STEP_EXPR_OUT];
-      reversed[i].attrs[STEP_EXPR_OUT] = orig.attrs[STEP_EXPR_IN];
-      reversed[i].attrs[STEP_EXPR_POWER].setBase(reversed[i].attrs[STEP_EXPR_POWER].base * -1.0f);
-      reversed[i].attrs[STEP_EXPR_POWER].setMutation(reversed[i].attrs[STEP_EXPR_POWER].mutation * -1.0f);
-      reversed[i].attrs[STEP_EXPR_POWER].applyMutation();
-    }
-    for (int i = 0; i < NUM_STEPS; i++) {
-      this->steps[i] = reversed[i];
-    }
+    // TODO: Implement this
+    // Step reversed[NUM_STEPS];
+    // for (int i = 0; i < NUM_STEPS; i++) {
+    //   Step orig = this->steps[NUM_STEPS - i - 1];
+    //   reversed[i] = orig;
+    //   reversed[i].idx = i;
+    //   reversed[i].updateIn();
+    //   float newShiftBase = baseStepLen - orig.attrs[STEP_LEN].base - orig.attrs[STEP_SHIFT].base;
+    //   float newShiftMut = -orig.attrs[STEP_LEN].mutation - orig.attrs[STEP_SHIFT].mutation;
+    //   reversed[i].attrs[STEP_SHIFT].setBase(newShiftBase);
+    //   reversed[i].attrs[STEP_SHIFT].setMutation(newShiftMut);
+    //   reversed[i].attrs[STEP_SHIFT].applyMutation();
+    //   reversed[i].attrs[STEP_EXPR_IN] = orig.attrs[STEP_EXPR_OUT];
+    //   reversed[i].attrs[STEP_EXPR_OUT] = orig.attrs[STEP_EXPR_IN];
+    //   reversed[i].attrs[STEP_EXPR_POWER].setBase(reversed[i].attrs[STEP_EXPR_POWER].base * -1.0f);
+    //   reversed[i].attrs[STEP_EXPR_POWER].setMutation(reversed[i].attrs[STEP_EXPR_POWER].mutation * -1.0f);
+    //   reversed[i].attrs[STEP_EXPR_POWER].applyMutation();
+    // }
+    // for (int i = 0; i < NUM_STEPS; i++) {
+    //   this->steps[i] = reversed[i];
+    // }
   }
   void flip() {
-    float low = 2.0f;
-    float high = -2.0f;
-    for (int i = 0; i < NUM_STEPS; i++) {
-      low = fminf(low, this->steps[i].attrs[STEP_VALUE].base);
-      high = fmaxf(high, this->steps[i].attrs[STEP_VALUE].base);
-    }
-    float range = high - low;
-    for (int i = 0; i < NUM_STEPS; i++) {
-      this->steps[i].attrs[STEP_VALUE].setBase(range - (this->steps[i].attrs[STEP_VALUE].base - low) + low);
-      this->steps[i].attrs[STEP_VALUE].setMutation(this->steps[i].attrs[STEP_VALUE].mutation * -1.0f);
-      this->steps[i].attrs[STEP_VALUE].applyMutation();
-    }
+    // TODO: Implement this
+    // float low = 2.0f;
+    // float high = -2.0f;
+    // for (int i = 0; i < NUM_STEPS; i++) {
+    //   low = fminf(low, this->steps[i].attrs[STEP_VALUE].base);
+    //   high = fmaxf(high, this->steps[i].attrs[STEP_VALUE].base);
+    // }
+    // float range = high - low;
+    // for (int i = 0; i < NUM_STEPS; i++) {
+    //   this->steps[i].attrs[STEP_VALUE].setBase(range - (this->steps[i].attrs[STEP_VALUE].base - low) + low);
+    //   this->steps[i].attrs[STEP_VALUE].setMutation(this->steps[i].attrs[STEP_VALUE].mutation * -1.0f);
+    //   this->steps[i].attrs[STEP_VALUE].applyMutation();
+    // }
   }
   void bakeMutation() {
-		for (int i = 0; i < NUM_STEPS; i++) {
-      this->steps[i].bakeMutation();
-		}
+    // TODO: Implement this
+		// for (int i = 0; i < NUM_STEPS; i++) {
+    //   this->steps[i].bakeMutation();
+		// }
   }
 };
 
