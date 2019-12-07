@@ -766,12 +766,10 @@ void Phaseque::process(const ProcessArgs &args) {
 
       for (int i = 0; i < NUM_STEPS; i++) {
         outputs[STEP_GATE_OUTPUT + i].setVoltage(activeStep->idx == i ? 10.f : 0.f);
-        // lights[STEP_GATE_LIGHT + i].setBrightness(activeStep->idx == i ? 1.f : 0.f);
       }
     } else {
       for (int i = 0; i < NUM_STEPS; i++) {
         outputs[STEP_GATE_OUTPUT + i].setVoltage(0.f);
-        // lights[STEP_GATE_LIGHT + i].setBrightness(0.f);
       }
     }
   }
@@ -784,6 +782,7 @@ void Phaseque::process(const ProcessArgs &args) {
   // }
 
   this->pattern.findStepsForPhase(this->phaseShifted);
+
   this->processIndicators();
 
   lastPhase = phase;
