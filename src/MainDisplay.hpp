@@ -7,14 +7,12 @@
 #endif
 
 struct MainDisplayConsumer {
-  float resolution = 8.f;
+  unsigned int resolution = 8;
   float phase = 0.f;
   int direction = 1;
-  Pattern pattern;
+  Pattern<8, 4> pattern;
   Step activeStep;
   bool hasActiveStep = false;
-  // float *globalValueInput = nullptr;
-  // float *globalValueParam = nullptr;
   bool globalGate = false;
   float globalShift = 0.f;
   float globalLen = 1.f;
@@ -169,81 +167,81 @@ struct MainDisplayWidget : BaseDisplayWidget {
     }
   }
 
-  void drawSteps(const DrawArgs &args) {
-    nvgStrokeWidth(args.vg, 1.0f);
-    nvgScissor(args.vg, padding - 1, padding - 1, area.x + 2, area.y + 2);
-    nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
+  // void drawSteps(const DrawArgs &args) {
+  //   nvgStrokeWidth(args.vg, 1.0f);
+  //   nvgScissor(args.vg, padding - 1, padding - 1, area.x + 2, area.y + 2);
+  //   nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
 
-    bool globalGate = this->consumer->globalGate;
-    int polyphonyMode = this->consumer->polyphonyMode;
+  //   bool globalGate = this->consumer->globalGate;
+  //   int polyphonyMode = this->consumer->polyphonyMode;
 
-    for (int i = 0; i < NUM_STEPS; i++) {
-      Step *step = &this->consumer->pattern.steps[i];
+  //   for (int i = 0; i < NUM_STEPS; i++) {
+  //     Step *step = &this->consumer->pattern.steps[i];
 
-      if (!step->gate ^ !globalGate) {
-        nvgStrokeColor(args.vg, lcdDisabledColor);
-        nvgFillColor(args.vg, lcdDisabledColor);
-        nvgGlobalAlpha(args.vg, 1.f);
-        drawStep(args, step, false);
-        if (step->mutationStrength != 0.f) {
-          nvgStrokeColor(args.vg, lcdDisabledMutColor);
-          nvgFillColor(args.vg, lcdDisabledMutColor);
-          nvgGlobalAlpha(args.vg, std::min(step->mutationStrength, 1.f));
-          drawStep(args, step, true);
-        }
-      }
-      if (step->gate ^ !globalGate) {
-        nvgStrokeColor(args.vg, lcdDimmedColor);
-        nvgFillColor(args.vg, lcdDimmedColor);
-        nvgGlobalAlpha(args.vg, 1.f);
-        drawStep(args, step, false);
-        if (step->mutationStrength != 0.f) {
-          nvgStrokeColor(args.vg, lcdDimmedMutColor);
-          nvgFillColor(args.vg, lcdDimmedMutColor);
-          nvgGlobalAlpha(args.vg, std::min(step->mutationStrength, 1.f));
-          drawStep(args, step, true);
-        }
-      }
-      nvgStrokeColor(args.vg, lcdActiveColor);
-      nvgFillColor(args.vg, lcdActiveColor);
-      nvgGlobalAlpha(args.vg, 1.f);
-      if (polyphonyMode == PolyphonyModes::POLYPHONIC) {
-        if (this->consumer->stepsStates[i]) {
-          drawStep(args, step, false);
-          if (step->mutationStrength != 0.f) {
-            nvgStrokeColor(args.vg, lcdActiveMutColor);
-            nvgFillColor(args.vg, lcdActiveMutColor);
-            nvgGlobalAlpha(args.vg, std::min(step->mutationStrength, 1.f));
-            drawStep(args, step, true);
-          }
-        }
-      } else if (polyphonyMode == PolyphonyModes::UNISON) {
-        if (this->consumer->unisonStates[i]) {
-          drawStep(args, step, false);
-        }
-        if (this->consumer->stepsStates[i]) {
-          if (step->mutationStrength != 0.f) {
-            nvgStrokeColor(args.vg, lcdActiveMutColor);
-            nvgFillColor(args.vg, lcdActiveMutColor);
-            nvgGlobalAlpha(args.vg, std::min(step->mutationStrength, 1.f));
-            drawStep(args, step, true);
-          }
-        }
-      }
-    }
-    if (polyphonyMode == PolyphonyModes::MONOPHONIC && this->consumer->hasActiveStep) {
-      drawStep(args, &this->consumer->activeStep, false);
-      if (this->consumer->activeStep.mutationStrength != 0.f) {
-        nvgStrokeColor(args.vg, lcdActiveMutColor);
-        nvgFillColor(args.vg, lcdActiveMutColor);
-        nvgGlobalAlpha(args.vg, std::min(this->consumer->activeStep.mutationStrength, 1.f));
-        drawStep(args, &this->consumer->activeStep, true);
-      }
-    }
+  //     if (!step->gate ^ !globalGate) {
+  //       nvgStrokeColor(args.vg, lcdDisabledColor);
+  //       nvgFillColor(args.vg, lcdDisabledColor);
+  //       nvgGlobalAlpha(args.vg, 1.f);
+  //       drawStep(args, step, false);
+  //       if (step->mutationStrength != 0.f) {
+  //         nvgStrokeColor(args.vg, lcdDisabledMutColor);
+  //         nvgFillColor(args.vg, lcdDisabledMutColor);
+  //         nvgGlobalAlpha(args.vg, std::min(step->mutationStrength, 1.f));
+  //         drawStep(args, step, true);
+  //       }
+  //     }
+  //     if (step->gate ^ !globalGate) {
+  //       nvgStrokeColor(args.vg, lcdDimmedColor);
+  //       nvgFillColor(args.vg, lcdDimmedColor);
+  //       nvgGlobalAlpha(args.vg, 1.f);
+  //       drawStep(args, step, false);
+  //       if (step->mutationStrength != 0.f) {
+  //         nvgStrokeColor(args.vg, lcdDimmedMutColor);
+  //         nvgFillColor(args.vg, lcdDimmedMutColor);
+  //         nvgGlobalAlpha(args.vg, std::min(step->mutationStrength, 1.f));
+  //         drawStep(args, step, true);
+  //       }
+  //     }
+  //     nvgStrokeColor(args.vg, lcdActiveColor);
+  //     nvgFillColor(args.vg, lcdActiveColor);
+  //     nvgGlobalAlpha(args.vg, 1.f);
+  //     if (polyphonyMode == PolyphonyModes::POLYPHONIC) {
+  //       if (this->consumer->stepsStates[i]) {
+  //         drawStep(args, step, false);
+  //         if (step->mutationStrength != 0.f) {
+  //           nvgStrokeColor(args.vg, lcdActiveMutColor);
+  //           nvgFillColor(args.vg, lcdActiveMutColor);
+  //           nvgGlobalAlpha(args.vg, std::min(step->mutationStrength, 1.f));
+  //           drawStep(args, step, true);
+  //         }
+  //       }
+  //     } else if (polyphonyMode == PolyphonyModes::UNISON) {
+  //       if (this->consumer->unisonStates[i]) {
+  //         drawStep(args, step, false);
+  //       }
+  //       if (this->consumer->stepsStates[i]) {
+  //         if (step->mutationStrength != 0.f) {
+  //           nvgStrokeColor(args.vg, lcdActiveMutColor);
+  //           nvgFillColor(args.vg, lcdActiveMutColor);
+  //           nvgGlobalAlpha(args.vg, std::min(step->mutationStrength, 1.f));
+  //           drawStep(args, step, true);
+  //         }
+  //       }
+  //     }
+  //   }
+  //   if (polyphonyMode == PolyphonyModes::MONOPHONIC && this->consumer->hasActiveStep) {
+  //     drawStep(args, &this->consumer->activeStep, false);
+  //     if (this->consumer->activeStep.mutationStrength != 0.f) {
+  //       nvgStrokeColor(args.vg, lcdActiveMutColor);
+  //       nvgFillColor(args.vg, lcdActiveMutColor);
+  //       nvgGlobalAlpha(args.vg, std::min(this->consumer->activeStep.mutationStrength, 1.f));
+  //       drawStep(args, &this->consumer->activeStep, true);
+  //     }
+  //   }
 
-    nvgResetScissor(args.vg);
-    nvgGlobalCompositeOperation(args.vg, NVG_SOURCE_OVER);
-  }
+  //   nvgResetScissor(args.vg);
+  //   nvgGlobalCompositeOperation(args.vg, NVG_SOURCE_OVER);
+  // }
 
   void draw(const DrawArgs &args) override {
     drawBackground(args);
@@ -256,7 +254,7 @@ struct MainDisplayWidget : BaseDisplayWidget {
       drawCross(args, Vec(padding + i * stepX, padding + crossLine3));
     }
     drawResolution(args);
-    drawSteps(args);
+    // drawSteps(args);
 
     this->consumer->consumed = true;
   }

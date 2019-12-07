@@ -35,7 +35,7 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
   resolutionDisplay->box.pos = Vec(152, 52);
   resolutionDisplay->box.size = Vec(29, 21);
   if (module) {
-    resolutionDisplay->value = &module->resolution;
+    resolutionDisplay->value = &module->resolutionDisplay;
   }
   addChild(resolutionDisplay);
 

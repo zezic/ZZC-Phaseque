@@ -209,23 +209,24 @@ void Phaseque::processPatternNav() {
 
 void Phaseque::processButtons() {
   if (waitButtonTrigger.process(params[WAIT_SWITCH_PARAM].getValue())) {
-    wait ^= true;
+    this->wait ^= true;
   }
   if (tempoTrackButtonTrigger.process(params[TEMPO_TRACK_SWITCH_PARAM].getValue())) {
-    tempoTrack ^= true;
+    this->tempoTrack ^= true;
     lights[TEMPO_TRACK_LED].value = tempoTrack ? 1.0f : 0.0f;
   }
   if (absModeTrigger.process(params[ABS_MODE_SWITCH_PARAM].getValue())) {
-    absMode ^= true;
+    this->absMode ^= true;
     lights[ABS_MODE_LED].value = absMode ? 1.0f : 0.0f;
   }
-  for (int i = 0; i < NUM_STEPS; i++) {
-    if (gateButtonsTriggers[i].process(params[GATE_SWITCH_PARAM + i].getValue())) {
-      pattern.steps[i].gate ^= true;
-    }
-  }
+  // TODO: Implement this
+  // for (int i = 0; i < NUM_STEPS; i++) {
+  //   if (gateButtonsTriggers[i].process(params[GATE_SWITCH_PARAM + i].getValue())) {
+  //     this->pattern.steps[i].gate ^= true;
+  //   }
+  // }
   if (globalGateButtonTrigger.process(params[GLOBAL_GATE_SWITCH_PARAM].getValue())) {
-    globalGateInternal ^= true;
+    this->globalGateInternal ^= true;
   }
 }
 
@@ -326,30 +327,31 @@ void Phaseque::processPatternButtons() {
 }
 
 void Phaseque::processJumpInputs() {
-  this->jump = false;
-  if (absMode || samplesSinceLastReset < 20) {
-    return;
-  }
-  for (int i = 0; i < NUM_STEPS; i++) {
-    if (inputs[STEP_JUMP_INPUT + i].isConnected() && jumpInputsTriggers[i].process(inputs[STEP_JUMP_INPUT + i].getVoltage())) {
-      jumpToStep(pattern.steps[i]);
-      retrigGapGenerator.trigger(1e-4f);
-      return;
-    }
-  }
-  if (inputs[RND_JUMP_INPUT].isConnected() && rndJumpInputTrigger.process(inputs[RND_JUMP_INPUT].getVoltage())) {
-    int nonMuted[NUM_STEPS];
-    int idx = 0;
-    for (int i = 0; i < NUM_STEPS; i++) {
-      if (!pattern.steps[i].gate ^ !globalGate) { continue; }
-      nonMuted[idx] = i;
-      idx++;
-    }
-    if (idx > 0) {
-      jumpToStep(pattern.steps[nonMuted[(int) (random::uniform() * idx)]]);
-      retrigGapGenerator.trigger(1e-4f);
-    }
-  }
+  // TODO: Implement this
+  // this->jump = false;
+  // if (absMode || samplesSinceLastReset < 20) {
+  //   return;
+  // }
+  // for (int i = 0; i < NUM_STEPS; i++) {
+  //   if (inputs[STEP_JUMP_INPUT + i].isConnected() && jumpInputsTriggers[i].process(inputs[STEP_JUMP_INPUT + i].getVoltage())) {
+  //     jumpToStep(pattern.steps[i]);
+  //     retrigGapGenerator.trigger(1e-4f);
+  //     return;
+  //   }
+  // }
+  // if (inputs[RND_JUMP_INPUT].isConnected() && rndJumpInputTrigger.process(inputs[RND_JUMP_INPUT].getVoltage())) {
+  //   int nonMuted[NUM_STEPS];
+  //   int idx = 0;
+  //   for (int i = 0; i < NUM_STEPS; i++) {
+  //     if (!pattern.steps[i].gate ^ !globalGate) { continue; }
+  //     nonMuted[idx] = i;
+  //     idx++;
+  //   }
+  //   if (idx > 0) {
+  //     jumpToStep(pattern.steps[nonMuted[(int) (random::uniform() * idx)]]);
+  //     retrigGapGenerator.trigger(1e-4f);
+  //   }
+  // }
 }
 
 void Phaseque::processIndicators() {
@@ -395,18 +397,19 @@ void Phaseque::processIndicators() {
 }
 
 void Phaseque::triggerIfBetween(float from, float to) {
-  if (!activeStep) {
-    return;
-  }
-  for (int i = 0; i < NUM_STEPS; i++) {
-    if (activeStep->idx != i) { continue; }
-    if (!pattern.steps[i].gate ^ !globalGate) { continue; }
-    float retrigWrapped = fastmod(direction == 1 ? pattern.steps[i].in() : pattern.steps[i].out(), 1.0);
-    if (from <= retrigWrapped && retrigWrapped < to) {
-      retrigGapGenerator.trigger(1e-4f);
-      break;
-    }
-  }
+  // TODO: Implement this
+  // if (!activeStep) {
+  //   return;
+  // }
+  // for (int i = 0; i < NUM_STEPS; i++) {
+  //   if (activeStep->idx != i) { continue; }
+  //   if (!pattern.steps[i].gate ^ !globalGate) { continue; }
+  //   float retrigWrapped = fastmod(direction == 1 ? pattern.steps[i].in() : pattern.steps[i].out(), 1.0);
+  //   if (from <= retrigWrapped && retrigWrapped < to) {
+  //     retrigGapGenerator.trigger(1e-4f);
+  //     break;
+  //   }
+  // }
 }
 
 void Phaseque::renderStep(Step *step, int channel) {
@@ -596,20 +599,21 @@ void Phaseque::processTransport(bool phaseWasZeroed, float sampleTime) {
 }
 
 void Phaseque::findActiveSteps() {
-  if (this->polyphonyMode == PolyphonyModes::POLYPHONIC) {
-    this->activeStep = nullptr;
-    this->pattern.updateStepsStates(phaseShifted, globalGate, stepsStates, false);
-  } else if (polyphonyMode == PolyphonyModes::UNISON) {
-    this->activeStep = nullptr;
-    this->pattern.updateStepsStates(phaseShifted, globalGate, stepsStates, false);
-    this->pattern.updateStepsStates(phaseShifted, globalGate, unisonStates, true);
-  } else {
-    activeStep = pattern.getStepForPhase(phaseShifted, globalGate);
-    for (int i = 0; i < NUM_STEPS; i++) {
-      stepsStates[i] = false;
-      unisonStates[i] = false;
-    }
-  }
+  // TODO: Implement this
+  // if (this->polyphonyMode == PolyphonyModes::POLYPHONIC) {
+  //   this->activeStep = nullptr;
+  //   this->pattern.updateStepsStates(phaseShifted, globalGate, stepsStates, false);
+  // } else if (polyphonyMode == PolyphonyModes::UNISON) {
+  //   this->activeStep = nullptr;
+  //   this->pattern.updateStepsStates(phaseShifted, globalGate, stepsStates, false);
+  //   this->pattern.updateStepsStates(phaseShifted, globalGate, unisonStates, true);
+  // } else {
+  //   activeStep = pattern.getStepForPhase(phaseShifted, globalGate);
+  //   for (int i = 0; i < NUM_STEPS; i++) {
+  //     stepsStates[i] = false;
+  //     unisonStates[i] = false;
+  //   }
+  // }
 }
 
 void Phaseque::feedDisplays() {
@@ -659,9 +663,11 @@ void Phaseque::process(const ProcessArgs &args) {
   bool phaseWasZeroed = this->processPhaseParam(sampleTime);
 
   if (absMode) {
-    resolution = 1.0;
+    this->resolution = 1;
+    this->resolutionDisplay = 1.f;
   } else {
-    resolution = pattern.resolution;
+    this->resolution = pattern.resolution;
+    this->resolutionDisplay = pattern.resolution;
   }
 
   this->processJumpInputs();
@@ -701,7 +707,8 @@ void Phaseque::process(const ProcessArgs &args) {
   if (polyphonyMode == POLYPHONIC || polyphonyMode == UNISON) {
     for (int i = 0; i < NUM_STEPS; i++) {
       if (stepsStates[i]) {
-        renderStep(&pattern.steps[i], i);
+        // TODO: Enable this
+        // renderStep(&pattern.steps[i], i);
         outputs[GATE_OUTPUT].setVoltage(clutch ? 10.f : 0.f, i);
         outputs[STEP_GATE_OUTPUT + i].setVoltage(10.f);
         lights[STEP_GATE_LIGHT + i].setBrightness(1.f);
@@ -712,7 +719,8 @@ void Phaseque::process(const ProcessArgs &args) {
       }
       if (polyphonyMode == UNISON) {
         if (unisonStates[i]) {
-          renderUnison(&pattern.steps[i], i + NUM_STEPS);
+          // TODO: Enable this
+          // renderUnison(&pattern.steps[i], i + NUM_STEPS);
           outputs[GATE_OUTPUT].setVoltage(clutch ? 10.f : 0.f, i + NUM_STEPS);
           outputs[STEP_GATE_OUTPUT + i].setVoltage(10.f);
           lights[STEP_GATE_LIGHT + i].setBrightness(1.f);
@@ -765,9 +773,10 @@ void Phaseque::process(const ProcessArgs &args) {
 
   outputs[PTRN_PHASE_OUTPUT].setVoltage(phaseShifted * 10.f);
 
-  for (int i = 0; i < NUM_STEPS; i++) {
-    lights[GATE_SWITCH_LED + i].setBrightness(pattern.steps[i].gate ^ !globalGate);
-  }
+  // TODO: Implement this
+  // for (int i = 0; i < NUM_STEPS; i++) {
+  //   lights[GATE_SWITCH_LED + i].setBrightness(pattern.steps[i].gate ^ !globalGate);
+  // }
 
   lastPhase = phase;
   lastPhaseInState = inputs[PHASE_INPUT].isConnected();

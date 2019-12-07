@@ -150,10 +150,10 @@ struct Phaseque : Module {
     NUM_LIGHTS
   };
 
-  Pattern patterns[NUM_PATTERNS];
+  Pattern<8, 4> patterns[NUM_PATTERNS];
   unsigned int patternIdx = 0;
   unsigned int lastPatternIdx = 0;
-  Pattern pattern = patterns[patternIdx];
+  Pattern<8, 4> pattern = patterns[patternIdx];
   Step* activeStep = nullptr;
   Step* lastActiveStep = nullptr;
   int goToRequest = 0;
@@ -238,7 +238,8 @@ struct Phaseque : Module {
   float bpm = 120.0f;
   bool bpmDisabled = false;
 
-  float resolution = pattern.resolution;
+  unsigned int resolution = pattern.resolution;
+  float resolutionDisplay = pattern.resolution;
   unsigned int lastGoToRequest = 0;
 
   int polyphonyMode = MONOPHONIC;
@@ -371,7 +372,6 @@ struct Phaseque : Module {
     }
     this->patternIdx = 0;
     takeOutCurrentPattern();
-    this->refreshPatternPointers();
     lights[TEMPO_TRACK_LED].value = tempoTrack ? 1.0f : 0.0f;
     lights[ABS_MODE_LED].value = absMode ? 1.0f : 0.0f;
     lights[CLUTCH_LED].value = clutch ? 1.0f : 0.0f;
@@ -403,132 +403,149 @@ struct Phaseque : Module {
     this->pattern.mutate(factor);
   }
   void mutateStep(int stepIdx, float factor) {
-    this->pattern.steps[stepIdx].mutate(factor);
+    // TODO: implement this
+    // this->pattern.steps[stepIdx].mutate(factor);
   }
   void scaleMutation(float factor) {
-    this->pattern.scaleMutation(factor);
+    // TODO: implement this
+    // this->pattern.scaleMutation(factor);
   }
   void resetMutation() {
-    this->pattern.resetMutation();
+    // TODO: implement this
+    // this->pattern.resetMutation();
   }
   void resetStepMutation(int stepIdx) {
-    this->pattern.steps[stepIdx].resetMutation();
+    // TODO: implement this
+    // this->pattern.steps[stepIdx].resetMutation();
   }
   void bakeMutation() {
-    this->pattern.bakeMutation();
+    // TODO: implement this
+    // this->pattern.bakeMutation();
   }
 
   void showCustomSteps() {
-    if (this->gridDisplayConsumer) {
-      this->gridDisplayConsumer->dirtyMask.set(this->patternIdx, this->pattern.hasCustomSteps());
-    }
+    // TODO: implement this
+    // if (this->gridDisplayConsumer) {
+    //   this->gridDisplayConsumer->dirtyMask.set(this->patternIdx, this->pattern.hasCustomSteps());
+    // }
   }
 
   void setStepAttr(int stepNumber, int attr, float factor) {
-    this->pattern.steps[stepNumber].setAttr(attr, factor);
-    this->showCustomSteps();
+    // TODO: implement this
+    // this->pattern.steps[stepNumber].setAttr(attr, factor);
+    // this->showCustomSteps();
   }
 
   void setStepAttrAbs(int stepNumber, int attr, float target) {
-    this->pattern.steps[stepNumber].setAttrAbs(attr, target);
-    this->showCustomSteps();
+    // TODO: implement this
+    // this->pattern.steps[stepNumber].setAttrAbs(attr, target);
+    // this->showCustomSteps();
   }
 
   void setStepAttrBase(int stepNumber, int attr, float target) {
-    this->pattern.steps[stepNumber].setAttrBase(attr, target);
-    this->showCustomSteps();
+    // TODO: implement this
+    // this->pattern.steps[stepNumber].setAttrBase(attr, target);
+    // this->showCustomSteps();
   }
 
   void resetStepAttr(int stepNumber, int attr) {
-    this->pattern.steps[stepNumber].resetAttr(attr);
-    this->showCustomSteps();
+    // TODO: implement this
+    // this->pattern.steps[stepNumber].resetAttr(attr);
+    // this->showCustomSteps();
   }
 
   void setPatternReso(float target) {
-    this->pattern.resolution = roundf(clamp(target, 1.0f, 99.0f));
+    this->pattern.resolution = std::round(clamp(target, 1.0f, 99.0f));
   }
+
   void resetPatternReso() {
-    this->pattern.resolution = 8.0f;
+    this->pattern.resetResolution();
   }
 
   void adjPatternShift(float factor) {
-    this->pattern.shift = clamp(this->pattern.shift + factor, -baseStepLen, baseStepLen);
+    // TODO: implement this
+    // this->pattern.shift = clamp(this->pattern.shift + factor, -baseStepLen, baseStepLen);
   }
   void setPatternShift(float value) {
-    this->pattern.shift = clamp(value * baseStepLen, -baseStepLen, baseStepLen);
+    // TODO: implement this
+    // this->pattern.shift = clamp(value * baseStepLen, -baseStepLen, baseStepLen);
   }
   void resetPatternShift() {
-    this->pattern.shift = 0.0f;
+    this->pattern.shift = 0.f;
   }
 
   void copyToNext() {
-    int target = eucMod(this->patternIdx + 1, NUM_PATTERNS);
-    for (int i = 0; i < NUM_STEPS; i++) {
-      patterns[target].steps[i] = pattern.steps[i];
-    }
-    patterns[target].resolution = pattern.resolution;
+    unsigned int target = eucMod(this->patternIdx + 1, NUM_PATTERNS);
+    this->copyTo(target);
   }
 
   void copyToPrev() {
-    int target = eucMod(((int) this->patternIdx) - 1, NUM_PATTERNS);
-    for (int i = 0; i < NUM_STEPS; i++) {
-      patterns[target].steps[i] = pattern.steps[i];
-    }
+    unsigned int target = eucMod(this->patternIdx - 1, NUM_PATTERNS);
+    this->copyTo(target);
+  }
+
+  void copyTo(unsigned int target) {
+    std::memcpy(
+      this->patterns[target].stepBases,
+      this->pattern.stepBases,
+      sizeof(this->pattern.stepBases)
+    );
+    std::memcpy(
+      this->patterns[target].stepMutas,
+      this->pattern.stepMutas,
+      sizeof(this->pattern.stepMutas)
+    );
+    std::memcpy(
+      this->patterns[target].stepGates,
+      this->pattern.stepGates,
+      sizeof(this->pattern.stepGates)
+    );
     patterns[target].resolution = pattern.resolution;
   }
 
   void copyResoToAll() {
-    for (int i = 0; i < NUM_PATTERNS; i++) {
+    for (unsigned int i = 0; i < NUM_PATTERNS; i++) {
       patterns[i].resolution = pattern.resolution;
     }
   }
 
-  void refreshPatternPointers() {
-    pattern.refreshPointers(
-      &globalShift,
-      &globalLen,
-      &inputs[GLOBAL_EXPR_CURVE_INPUT],
-      &inputs[GLOBAL_EXPR_POWER_INPUT]
-    );
-  }
-
   void storeCurrentPattern() {
-    patterns[patternIdx] = pattern;
+    this->patterns[this->patternIdx] = this->pattern;
   }
 
   void takeOutCurrentPattern() {
-    pattern = patterns[patternIdx];
-    renderParamQuantities();
-    refreshPatternPointers();
+    this->pattern = this->patterns[patternIdx];
+    this->renderParamQuantities();
   }
 
   void renderParamQuantities() {
-    paramQuantities[PATTERN_RESO_PARAM]->setValue(pattern.resolution);
-    paramQuantities[PATTERN_SHIFT_PARAM]->setValue(pattern.shift / baseStepLen);
-    for (int s = 0; s < NUM_STEPS; s++) {
-      for (int a = 0; a < STEP_ATTRS_TOTAL; a++) {
-        paramQuantities[STEP_VALUE_PARAM + a * NUM_STEPS + s]->setValue(pattern.steps[s].attrs[a].base);
-      }
-    }
+    // TODO: implement this
+    // paramQuantities[PATTERN_RESO_PARAM]->setValue(pattern.resolution);
+    // paramQuantities[PATTERN_SHIFT_PARAM]->setValue(pattern.shift / baseStepLen);
+    // for (int s = 0; s < NUM_STEPS; s++) {
+    //   for (int a = 0; a < STEP_ATTRS_TOTAL; a++) {
+    //     paramQuantities[STEP_VALUE_PARAM + a * NUM_STEPS + s]->setValue(pattern.steps[s].attrs[a].base);
+    //   }
+    // }
   }
 
   void onReset() override {
     for (int i = 0; i < NUM_PATTERNS; i++) {
-      patterns[i].init();
-      patterns[i].goTo = eucMod(i + 1, NUM_PATTERNS);
+      this->patterns[i].init();
+      this->patterns[i].goTo = eucMod(i + 1, NUM_PATTERNS);
     }
-    patternIdx = 0;
-    takeOutCurrentPattern();
-    polyphonyMode = PolyphonyModes::MONOPHONIC;
+    this->patternIdx = 0;
+    this->takeOutCurrentPattern();
+    this->polyphonyMode = PolyphonyModes::MONOPHONIC;
   }
 
   void onRandomize() override {
-    pattern.randomize();
-    renderParamQuantities();
+    this->pattern.randomize();
+    this->renderParamQuantities();
   }
 
   json_t *dataToJson() override {
-    storeCurrentPattern();
+    this->storeCurrentPattern();
     json_t *rootJ = json_object();
     json_object_set_new(rootJ, "tempoTrack", json_boolean(tempoTrack));
     json_object_set_new(rootJ, "absMode", json_boolean(absMode));
@@ -560,28 +577,28 @@ struct Phaseque : Module {
     json_t *waitJ = json_object_get(rootJ, "wait");
     json_t *polyphonyModeJ = json_object_get(rootJ, "polyphonyMode");
     if (tempoTrackJ) {
-      tempoTrack = json_boolean_value(tempoTrackJ);
+      this->tempoTrack = json_boolean_value(tempoTrackJ);
     }
     lights[TEMPO_TRACK_LED].value = tempoTrack ? 1.0f : 0.0f;
     if (absModeJ) {
-      absMode = json_boolean_value(absModeJ);
+      this->absMode = json_boolean_value(absModeJ);
     }
     lights[ABS_MODE_LED].value = absMode ? 1.0f : 0.0f;
     if (clutchJ) {
-      clutch = json_boolean_value(clutchJ);
+      this->clutch = json_boolean_value(clutchJ);
     }
     lights[CLUTCH_LED].value = clutch ? 1.0f : 0.0f;
     if (globalGateInternalJ) {
-      globalGateInternal = json_boolean_value(globalGateInternalJ);
+      this->globalGateInternal = json_boolean_value(globalGateInternalJ);
     }
     if (json_integer_value(patternIdxJ) != 0) {
-      patternIdx = json_integer_value(patternIdxJ);
+      this->patternIdx = json_integer_value(patternIdxJ);
     }
     if (waitJ) {
-      wait = json_boolean_value(waitJ);
+      this->wait = json_boolean_value(waitJ);
     }
     if (polyphonyModeJ) {
-      polyphonyMode = json_integer_value(polyphonyModeJ);
+      this->polyphonyMode = json_integer_value(polyphonyModeJ);
     }
 
     json_t *patternsJ = json_object_get(rootJ, "patterns");
@@ -591,11 +608,11 @@ struct Phaseque : Module {
       for (unsigned int i = offset; i < arraySize && (i - offset) < NUM_PATTERNS; i++) {
         json_t *patternJ = json_array_get(patternsJ, i);
         if (!json_is_null(patternJ)) {
-          patterns[i - offset].dataFromJson(patternJ);
+          this->patterns[i - offset].dataFromJson(patternJ);
         }
       }
     }
 
-    takeOutCurrentPattern();
+    this->takeOutCurrentPattern();
   }
 };

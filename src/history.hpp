@@ -85,29 +85,31 @@ struct PhasequeStepAttrChange : history::ModuleAction {
   float newValue;
 
   void undo() override {
-    app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
-    assert(mw);
-    Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
-    phaseq->patterns[patternNum].steps[step].setAttrBase(attr, oldValue);
-    if (phaseq->patternIdx == patternNum) {
-      phaseq->pattern.steps[step].setAttrBase(attr, oldValue);
-      mw->module->params[paramId].value = oldValue;
-    } else {
-      phaseq->patternFlashNeg = patternNum;
-    }
+    // TODO: Implement this
+    // app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
+    // assert(mw);
+    // Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
+    // phaseq->patterns[patternNum].steps[step].setAttrBase(attr, oldValue);
+    // if (phaseq->patternIdx == patternNum) {
+    //   phaseq->pattern.steps[step].setAttrBase(attr, oldValue);
+    //   mw->module->params[paramId].value = oldValue;
+    // } else {
+    //   phaseq->patternFlashNeg = patternNum;
+    // }
   }
 
   void redo() override {
-    app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
-    assert(mw);
-    Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
-    phaseq->patterns[patternNum].steps[step].setAttrBase(attr, newValue);
-    if (phaseq->patternIdx == patternNum) {
-      phaseq->pattern.steps[step].setAttrBase(attr, newValue);
-      mw->module->params[paramId].value = newValue;
-    } else {
-      phaseq->patternFlashPos = patternNum;
-    }
+    // TODO: Implement this
+    // app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
+    // assert(mw);
+    // Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
+    // phaseq->patterns[patternNum].steps[step].setAttrBase(attr, newValue);
+    // if (phaseq->patternIdx == patternNum) {
+    //   phaseq->pattern.steps[step].setAttrBase(attr, newValue);
+    //   mw->module->params[paramId].value = newValue;
+    // } else {
+    //   phaseq->patternFlashPos = patternNum;
+    // }
   }
 
   PhasequeStepAttrChange() {

@@ -15,7 +15,7 @@ struct Pattern {
   simd::Vector<float, BLOCK_SIZE> stepMutas[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE];
   simd::Vector<float, BLOCK_SIZE> stepGates[SIZE / BLOCK_SIZE];
 
-  const float stepAttrDefaults[STEP_ATTRS_TOTAL] = {
+  simd::Vector<float, BLOCK_SIZE> stepAttrDefaults[STEP_ATTRS_TOTAL] = {
     simd::Vector<float, BLOCK_SIZE>(0.f),
     simd::Vector<float, BLOCK_SIZE>(1.f / SIZE),
     simd::Vector<float, BLOCK_SIZE>(0.f),
@@ -84,8 +84,8 @@ struct Pattern {
     }
     for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
       for (unsigned int blockIdx = 0; blockIdx  < SIZE / BLOCK_SIZE; blockIdx++) {
-        if (this->stepBases[attrIdx][blockIdx].v != this->stepAttrDefaults[attrIdx].v ||
-            this->stepMutas[attrIdx][blockIdx] != 0.f) {
+        if (simd::movemask(this->stepBases[attrIdx][blockIdx]) != simd::movemask(this->stepAttrDefaults[attrIdx]) ||
+            simd::movemask(this->stepMutas[attrIdx][blockIdx]) != 0) {
           return false;
         }
       }
@@ -96,8 +96,8 @@ struct Pattern {
   bool hasCustomSteps() {
     for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
       for (unsigned int blockIdx = 0; blockIdx  < SIZE / BLOCK_SIZE; blockIdx++) {
-        if (this->stepBases[attrIdx][blockIdx].v != this->stepAttrDefaults[attrIdx].v ||
-            this->stepMutas[attrIdx][blockIdx] != 0.f) {
+        if (simd::movemask(this->stepBases[attrIdx][blockIdx]) != simd::movemask(this->stepAttrDefaults[attrIdx]) ||
+            simd::movemask(this->stepMutas[attrIdx][blockIdx]) != 0) {
           return true;
         }
       }
@@ -126,6 +126,10 @@ struct Pattern {
 
   void randomizeReso() {
     this->resolution = 1 + std::round(99 * random::uniform());
+  }
+
+  void resetResolution() {
+    this->resolution = SIZE;
   }
 
   void quantize() {
