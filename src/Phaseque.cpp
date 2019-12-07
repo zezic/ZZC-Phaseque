@@ -359,6 +359,12 @@ void Phaseque::processIndicators() {
     return;
   }
 
+  for (unsigned int stepIdx = 0; stepIdx < 8; stepIdx++) {
+    unsigned int blockIdx = stepIdx / 4;
+    unsigned int stepInBlockIdx = stepIdx % 4;
+    lights[STEP_GATE_LIGHT + stepIdx].setBrightness(this->pattern.hitsTemp[blockIdx][stepInBlockIdx]);
+  }
+
   if (this->wait) {
     lights[WAIT_LED].value = 1.1f;
   }
@@ -711,11 +717,11 @@ void Phaseque::process(const ProcessArgs &args) {
         // renderStep(&pattern.steps[i], i);
         outputs[GATE_OUTPUT].setVoltage(clutch ? 10.f : 0.f, i);
         outputs[STEP_GATE_OUTPUT + i].setVoltage(10.f);
-        lights[STEP_GATE_LIGHT + i].setBrightness(1.f);
+        // lights[STEP_GATE_LIGHT + i].setBrightness(1.f);
       } else {
         outputs[GATE_OUTPUT].setVoltage(0.f, i);
         outputs[STEP_GATE_OUTPUT + i].setVoltage(0.f);
-        lights[STEP_GATE_LIGHT + i].setBrightness(0.f);
+        // lights[STEP_GATE_LIGHT + i].setBrightness(0.f);
       }
       if (polyphonyMode == UNISON) {
         if (unisonStates[i]) {
@@ -723,7 +729,7 @@ void Phaseque::process(const ProcessArgs &args) {
           // renderUnison(&pattern.steps[i], i + NUM_STEPS);
           outputs[GATE_OUTPUT].setVoltage(clutch ? 10.f : 0.f, i + NUM_STEPS);
           outputs[STEP_GATE_OUTPUT + i].setVoltage(10.f);
-          lights[STEP_GATE_LIGHT + i].setBrightness(1.f);
+          // lights[STEP_GATE_LIGHT + i].setBrightness(1.f);
         } else {
           outputs[GATE_OUTPUT].setVoltage(0.f, i + NUM_STEPS);
         }
@@ -760,16 +766,15 @@ void Phaseque::process(const ProcessArgs &args) {
 
       for (int i = 0; i < NUM_STEPS; i++) {
         outputs[STEP_GATE_OUTPUT + i].setVoltage(activeStep->idx == i ? 10.f : 0.f);
-        lights[STEP_GATE_LIGHT + i].setBrightness(activeStep->idx == i ? 1.f : 0.f);
+        // lights[STEP_GATE_LIGHT + i].setBrightness(activeStep->idx == i ? 1.f : 0.f);
       }
     } else {
       for (int i = 0; i < NUM_STEPS; i++) {
         outputs[STEP_GATE_OUTPUT + i].setVoltage(0.f);
-        lights[STEP_GATE_LIGHT + i].setBrightness(0.f);
+        // lights[STEP_GATE_LIGHT + i].setBrightness(0.f);
       }
     }
   }
-  this->processIndicators();
 
   outputs[PTRN_PHASE_OUTPUT].setVoltage(phaseShifted * 10.f);
 
@@ -777,6 +782,9 @@ void Phaseque::process(const ProcessArgs &args) {
   // for (int i = 0; i < NUM_STEPS; i++) {
   //   lights[GATE_SWITCH_LED + i].setBrightness(pattern.steps[i].gate ^ !globalGate);
   // }
+
+  this->pattern.findStepsForPhase(this->phaseShifted);
+  this->processIndicators();
 
   lastPhase = phase;
   lastPhaseInState = inputs[PHASE_INPUT].isConnected();

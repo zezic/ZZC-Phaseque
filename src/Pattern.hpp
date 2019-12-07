@@ -3,6 +3,12 @@
 #include "Step.hpp"
 
 
+inline simd::Vector<float, 4> eucMod(simd::Vector<float, 4> a, simd::Vector<float, 4> b) {
+  simd::Vector<float, 4> mod = simd::fmod(a, b);
+  return simd::ifelse(mod < 0.f, mod + b, mod);
+}
+
+
 template <unsigned int SIZE, unsigned int BLOCK_SIZE>
 struct Pattern {
   /* Pattern settings */
@@ -10,10 +16,13 @@ struct Pattern {
   unsigned int goTo = 0;
   float shift = 0.f;
 
+  simd::Vector<float, BLOCK_SIZE> hitsTemp[SIZE / BLOCK_SIZE];
+
   /* Step attributes, mutations and gates */
   simd::Vector<float, BLOCK_SIZE> stepBases[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE];
   simd::Vector<float, BLOCK_SIZE> stepMutas[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE];
   simd::Vector<float, BLOCK_SIZE> stepGates[SIZE / BLOCK_SIZE];
+  simd::Vector<float, BLOCK_SIZE> stepIns[SIZE / BLOCK_SIZE];
 
   simd::Vector<float, BLOCK_SIZE> stepAttrDefaults[STEP_ATTRS_TOTAL] = {
     simd::Vector<float, BLOCK_SIZE>(0.f),
@@ -24,6 +33,19 @@ struct Pattern {
     simd::Vector<float, BLOCK_SIZE>(0.f),
     simd::Vector<float, BLOCK_SIZE>(0.f),
   };
+
+  void findStepsForPhase(float phase) {
+    // simd::Vector<float, BLOCK_SIZE> hits[SIZE / BLOCK_SIZE];
+    for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+      simd::Vector<float, BLOCK_SIZE> inMod = this->stepIns[blockIdx];
+      simd::Vector<float, BLOCK_SIZE> outMod = eucMod(this->stepIns[blockIdx] + this->stepBases[StepAttr::STEP_LEN][blockIdx], 1.f);
+      simd::Vector<float, BLOCK_SIZE> hit = (inMod <= phase) ^ (phase < outMod) ^ (inMod < outMod);
+      // hits[blockIdx] = simd::ifelse(hit, 1.f, 0.f);
+      this->hitsTemp[blockIdx] = simd::ifelse(hit, 1.f, 0.f);
+    }
+    // std::cout << hits[0][0] << hits[0][1] << hits[0][2] << hits[0][3];
+    // std::cout << hits[1][0] << hits[1][1] << hits[1][2] << hits[1][3] << std::endl;
+  }
 
   json_t *dataToJson() {
     json_t *patternJ = json_object();
@@ -117,6 +139,11 @@ struct Pattern {
         this->stepBases[attrIdx][blockIdx] = this->stepAttrDefaults[attrIdx];
         this->stepMutas[attrIdx][blockIdx] = 0.f;
       }
+    }
+    for (unsigned int stepIdx = 0; stepIdx < SIZE; stepIdx++) {
+      unsigned int blockIdx = stepIdx / BLOCK_SIZE;
+      unsigned int stepInBlockIdx = stepIdx % BLOCK_SIZE;
+      this->stepIns[blockIdx][stepInBlockIdx] = 1.f / SIZE * stepIdx;
     }
   }
 
