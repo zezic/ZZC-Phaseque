@@ -430,20 +430,14 @@ struct Phaseque : Module {
     // }
   }
 
-  void setStepAttr(int stepNumber, int attr, float factor) {
-    // TODO: implement this
-    // this->pattern.steps[stepNumber].setAttr(attr, factor);
-    // this->showCustomSteps();
-  }
-
-  void setStepAttrAbs(int stepNumber, int attr, float target) {
-    // TODO: implement this
-    // this->pattern.steps[stepNumber].setAttrAbs(attr, target);
-    // this->showCustomSteps();
-  }
-
   void setStepAttrBase(int stepNumber, int attr, float target) {
     // TODO: implement this
+    unsigned int blockIdx = stepNumber / this->pattern.blockSize;
+    unsigned int stepInBlockIdx = stepNumber % this->pattern.blockSize;
+    this->pattern.stepBases[attr][blockIdx][stepInBlockIdx] = target;
+    if (attr == StepAttr::STEP_SHIFT || attr == StepAttr::STEP_LEN) {
+      this->pattern.recalcInOuts(blockIdx);
+    }
     // this->pattern.steps[stepNumber].setAttrBase(attr, target);
     // this->showCustomSteps();
   }
@@ -467,8 +461,7 @@ struct Phaseque : Module {
     // this->pattern.shift = clamp(this->pattern.shift + factor, -baseStepLen, baseStepLen);
   }
   void setPatternShift(float value) {
-    // TODO: implement this
-    // this->pattern.shift = clamp(value * baseStepLen, -baseStepLen, baseStepLen);
+    this->pattern.shift = clamp(value * this->pattern.baseStepLen, -this->pattern.baseStepLen, this->pattern.baseStepLen);
   }
   void resetPatternShift() {
     this->pattern.shift = 0.f;
@@ -520,8 +513,17 @@ struct Phaseque : Module {
 
   void renderParamQuantities() {
     // TODO: implement this
-    // paramQuantities[PATTERN_RESO_PARAM]->setValue(pattern.resolution);
-    // paramQuantities[PATTERN_SHIFT_PARAM]->setValue(pattern.shift / baseStepLen);
+    this->paramQuantities[PATTERN_RESO_PARAM]->setValue(this->pattern.resolution);
+    this->paramQuantities[PATTERN_SHIFT_PARAM]->setValue(this->pattern.shift / this->pattern.baseStepLen);
+    for (unsigned int stepIdx = 0; stepIdx < this->pattern.size; stepIdx++) {
+      unsigned int blockIdx = stepIdx / this->pattern.blockSize;
+      unsigned int stepInBlockIdx = stepIdx % this->pattern.blockSize;
+      for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
+        paramQuantities[STEP_VALUE_PARAM + stepIdx + attrIdx * this->pattern.size]->setValue(
+          this->pattern.stepBases[attrIdx][blockIdx][stepInBlockIdx]
+        );
+      }
+    }
     // for (int s = 0; s < NUM_STEPS; s++) {
     //   for (int a = 0; a < STEP_ATTRS_TOTAL; a++) {
     //     paramQuantities[STEP_VALUE_PARAM + a * NUM_STEPS + s]->setValue(pattern.steps[s].attrs[a].base);

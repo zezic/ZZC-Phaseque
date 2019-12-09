@@ -16,6 +16,10 @@ struct Pattern {
   unsigned int goTo = 0;
   float shift = 0.f;
 
+  unsigned int size = SIZE;
+  unsigned int blockSize = BLOCK_SIZE;
+  float baseStepLen = 1.f / SIZE;
+
   simd::Vector<float, BLOCK_SIZE> hitsTemp[SIZE / BLOCK_SIZE];
 
   /* Step attributes, mutations and gates */
@@ -23,6 +27,9 @@ struct Pattern {
   simd::Vector<float, BLOCK_SIZE> stepMutas[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE];
   simd::Vector<float, BLOCK_SIZE> stepGates[SIZE / BLOCK_SIZE];
   simd::Vector<float, BLOCK_SIZE> stepIns[SIZE / BLOCK_SIZE];
+
+  simd::Vector<float, BLOCK_SIZE> stepInsComputed[SIZE / BLOCK_SIZE];
+  simd::Vector<float, BLOCK_SIZE> stepOutsComputed[SIZE / BLOCK_SIZE];
 
   simd::Vector<float, BLOCK_SIZE> stepAttrDefaults[STEP_ATTRS_TOTAL] = {
     simd::Vector<float, BLOCK_SIZE>(0.f),
@@ -35,16 +42,16 @@ struct Pattern {
   };
 
   void findStepsForPhase(float phase) {
-    // simd::Vector<float, BLOCK_SIZE> hits[SIZE / BLOCK_SIZE];
     for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
-      simd::Vector<float, BLOCK_SIZE> inMod = this->stepIns[blockIdx];
-      simd::Vector<float, BLOCK_SIZE> outMod = eucMod(this->stepIns[blockIdx] + this->stepBases[StepAttr::STEP_LEN][blockIdx], 1.f);
-      simd::Vector<float, BLOCK_SIZE> hit = (inMod <= phase) ^ (phase < outMod) ^ (inMod < outMod);
-      // hits[blockIdx] = simd::ifelse(hit, 1.f, 0.f);
-      this->hitsTemp[blockIdx] = simd::ifelse(hit, 1.f, 0.f);
+      simd::Vector<float, BLOCK_SIZE> inMod = this->stepInsComputed[blockIdx];
+      simd::Vector<float, BLOCK_SIZE> outMod = this->stepOutsComputed[blockIdx];
+      this->hitsTemp[blockIdx] = (inMod <= phase) ^ (phase < outMod) ^ (inMod < outMod);
     }
-    // std::cout << hits[0][0] << hits[0][1] << hits[0][2] << hits[0][3];
-    // std::cout << hits[1][0] << hits[1][1] << hits[1][2] << hits[1][3] << std::endl;
+  }
+
+  void recalcInOuts(unsigned int blockIdx) {
+    this->stepInsComputed[blockIdx] = eucMod(this->stepIns[blockIdx] + this->stepBases[StepAttr::STEP_SHIFT][blockIdx], 1.f);
+    this->stepOutsComputed[blockIdx] = eucMod(this->stepInsComputed[blockIdx] + this->stepBases[StepAttr::STEP_LEN][blockIdx], 1.f);
   }
 
   json_t *dataToJson() {
@@ -59,7 +66,7 @@ struct Pattern {
 
       json_t *stepJ = json_object();
       json_object_set_new(stepJ, "gate", json_boolean(
-        this->stepGates[blockIdx][stepInBlockIdx] == 0xFFFFFFFF
+        this->stepGates[blockIdx][stepInBlockIdx]
       ));
       json_t *attrsJ = json_array();
       for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
@@ -90,7 +97,7 @@ struct Pattern {
 
       json_t *stepJ = json_array_get(stepsJ, stepIdx);
       bool gate = json_boolean_value(json_object_get(stepJ, "gate"));
-      this->stepGates[blockIdx][stepInBlockIdx] = gate ? 0xFFFFFFFF : 0x0;
+      this->stepGates[blockIdx][stepInBlockIdx] = gate ? 1.f : 0.f;
       json_t *attrsJ = json_object_get(stepJ, "attrs");
       for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
         json_t *attrJ = json_array_get(attrsJ, attrIdx);
@@ -106,8 +113,8 @@ struct Pattern {
     }
     for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
       for (unsigned int blockIdx = 0; blockIdx  < SIZE / BLOCK_SIZE; blockIdx++) {
-        if (simd::movemask(this->stepBases[attrIdx][blockIdx]) != simd::movemask(this->stepAttrDefaults[attrIdx]) ||
-            simd::movemask(this->stepMutas[attrIdx][blockIdx]) != 0) {
+        if (simd::movemask(this->stepBases[attrIdx][blockIdx] != this->stepAttrDefaults[attrIdx]) != 0xffff ||
+            simd::movemask(this->stepMutas[attrIdx][blockIdx] != 0.f) != 0xffff) {
           return false;
         }
       }
@@ -144,6 +151,9 @@ struct Pattern {
       unsigned int blockIdx = stepIdx / BLOCK_SIZE;
       unsigned int stepInBlockIdx = stepIdx % BLOCK_SIZE;
       this->stepIns[blockIdx][stepInBlockIdx] = 1.f / SIZE * stepIdx;
+    }
+    for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+      this->recalcInOuts(blockIdx);
     }
   }
 

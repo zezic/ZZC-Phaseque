@@ -219,12 +219,15 @@ void Phaseque::processButtons() {
     this->absMode ^= true;
     lights[ABS_MODE_LED].value = absMode ? 1.0f : 0.0f;
   }
-  // TODO: Implement this
-  // for (int i = 0; i < NUM_STEPS; i++) {
-  //   if (gateButtonsTriggers[i].process(params[GATE_SWITCH_PARAM + i].getValue())) {
-  //     this->pattern.steps[i].gate ^= true;
-  //   }
-  // }
+  for (unsigned int stepIdx = 0; stepIdx < this->pattern.size; stepIdx++) {
+    if (gateButtonsTriggers[stepIdx].process(params[GATE_SWITCH_PARAM + stepIdx].getValue())) {
+      unsigned int blockIdx = stepIdx / 4;
+      unsigned int stepInBlockIdx = stepIdx % 4;
+      int intMask = 1 << stepInBlockIdx;
+      simd::float_4 mask = simd::movemaskInverse<simd::float_4>(intMask);
+      this->pattern.stepGates[blockIdx] = this->pattern.stepGates[blockIdx] ^ mask;
+    }
+  }
   if (globalGateButtonTrigger.process(params[GLOBAL_GATE_SWITCH_PARAM].getValue())) {
     this->globalGateInternal ^= true;
   }
@@ -359,11 +362,17 @@ void Phaseque::processIndicators() {
     return;
   }
 
-  for (unsigned int stepIdx = 0; stepIdx < 8; stepIdx++) {
+  for (unsigned int stepIdx = 0; stepIdx < this->pattern.size; stepIdx++) {
     unsigned int blockIdx = stepIdx / 4;
     unsigned int stepInBlockIdx = stepIdx % 4;
-    lights[STEP_GATE_LIGHT + stepIdx].setBrightness(this->pattern.hitsTemp[blockIdx][stepInBlockIdx]);
+    lights[STEP_GATE_LIGHT + stepIdx].setBrightness(simd::movemask(this->pattern.hitsTemp[blockIdx]) & 1 << stepInBlockIdx);
+    lights[GATE_SWITCH_LED + stepIdx].setBrightness((simd::movemask(this->pattern.stepGates[blockIdx]) & 1 << stepInBlockIdx) ^ !globalGate);
   }
+
+  // TODO: Implement this
+  // for (int i = 0; i < NUM_STEPS; i++) {
+  // }
+
 
   if (this->wait) {
     lights[WAIT_LED].value = 1.1f;
@@ -632,22 +641,11 @@ void Phaseque::feedDisplays() {
     }
   }
   if (this->mainDisplayConsumer->consumed) {
-    this->mainDisplayConsumer->resolution = this->pattern.resolution;
     this->mainDisplayConsumer->phase = this->phaseShifted;
     this->mainDisplayConsumer->direction = this->direction;
     this->mainDisplayConsumer->pattern = this->pattern;
     this->mainDisplayConsumer->globalGate = this->globalGate;
     this->mainDisplayConsumer->polyphonyMode = this->polyphonyMode;
-    std::memcpy(this->mainDisplayConsumer->stepsStates, this->stepsStates, sizeof(this->stepsStates));
-    std::memcpy(this->mainDisplayConsumer->unisonStates, this->unisonStates, sizeof(this->unisonStates));
-    this->mainDisplayConsumer->globalShift = this->globalShift;
-    this->mainDisplayConsumer->globalLen = this->globalLen;
-    if (this->activeStep) {
-      this->mainDisplayConsumer->activeStep = *this->activeStep;
-      this->mainDisplayConsumer->hasActiveStep = true;
-    } else {
-      this->mainDisplayConsumer->hasActiveStep = false;
-    }
     this->mainDisplayConsumer->exprCurveCV = inputs[GLOBAL_EXPR_CURVE_INPUT].getVoltage();
     this->mainDisplayConsumer->exprPowerCV = inputs[GLOBAL_EXPR_POWER_INPUT].getVoltage();
     this->mainDisplayConsumer->consumed = false;
@@ -775,11 +773,6 @@ void Phaseque::process(const ProcessArgs &args) {
   }
 
   outputs[PTRN_PHASE_OUTPUT].setVoltage(phaseShifted * 10.f);
-
-  // TODO: Implement this
-  // for (int i = 0; i < NUM_STEPS; i++) {
-  //   lights[GATE_SWITCH_LED + i].setBrightness(pattern.steps[i].gate ^ !globalGate);
-  // }
 
   this->pattern.findStepsForPhase(this->phaseShifted);
 
