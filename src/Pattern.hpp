@@ -66,7 +66,7 @@ struct Pattern {
 
       json_t *stepJ = json_object();
       json_object_set_new(stepJ, "gate", json_boolean(
-        this->stepGates[blockIdx][stepInBlockIdx]
+        simd::movemask(this->stepGates[blockIdx]) & 1 << stepInBlockIdx
       ));
       json_t *attrsJ = json_array();
       for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
@@ -87,6 +87,7 @@ struct Pattern {
   }
 
   void dataFromJson(json_t *patternJ) {
+    this->init();
     this->resolution = json_number_value(json_object_get(patternJ, "resolution"));
     this->goTo = json_number_value(json_object_get(patternJ, "goTo"));
     this->shift = json_number_value(json_object_get(patternJ, "shift"));
@@ -94,10 +95,12 @@ struct Pattern {
     for (unsigned int stepIdx = 0; stepIdx < SIZE; stepIdx++) {
       unsigned int blockIdx = stepIdx / BLOCK_SIZE;
       unsigned int stepInBlockIdx = stepIdx % BLOCK_SIZE;
-
       json_t *stepJ = json_array_get(stepsJ, stepIdx);
       bool gate = json_boolean_value(json_object_get(stepJ, "gate"));
-      this->stepGates[blockIdx][stepInBlockIdx] = gate ? 1.f : 0.f;
+      std::cout << "Block has: " << simd::movemask(this->stepGates[blockIdx]) << std::endl;
+      if (!gate) {
+        this->stepGates[blockIdx] ^= simd::movemaskInverse<simd::Vector<float, BLOCK_SIZE>>(1 << stepInBlockIdx);
+      }
       json_t *attrsJ = json_object_get(stepJ, "attrs");
       for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
         json_t *attrJ = json_array_get(attrsJ, attrIdx);
@@ -153,6 +156,7 @@ struct Pattern {
       this->stepIns[blockIdx][stepInBlockIdx] = 1.f / SIZE * stepIdx;
     }
     for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+      this->stepGates[blockIdx] = simd::movemaskInverse<simd::float_4>(0);
       this->recalcInOuts(blockIdx);
     }
   }

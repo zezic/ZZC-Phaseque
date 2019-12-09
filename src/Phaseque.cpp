@@ -225,7 +225,7 @@ void Phaseque::processButtons() {
       unsigned int stepInBlockIdx = stepIdx % 4;
       int intMask = 1 << stepInBlockIdx;
       simd::float_4 mask = simd::movemaskInverse<simd::float_4>(intMask);
-      this->pattern.stepGates[blockIdx] = this->pattern.stepGates[blockIdx] ^ mask;
+      this->pattern.stepGates[blockIdx] ^= mask;
     }
   }
   if (globalGateButtonTrigger.process(params[GLOBAL_GATE_SWITCH_PARAM].getValue())) {
