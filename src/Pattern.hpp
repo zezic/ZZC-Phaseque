@@ -156,7 +156,7 @@ struct Pattern {
       this->stepIns[blockIdx][stepInBlockIdx] = 1.f / SIZE * stepIdx;
     }
     for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
-      this->stepGates[blockIdx] = simd::movemaskInverse<simd::float_4>(0);
+      this->stepGates[blockIdx] = simd::float_4::mask();
       this->recalcInOuts(blockIdx);
     }
   }
