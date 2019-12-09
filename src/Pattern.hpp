@@ -3,13 +3,14 @@
 #include "Step.hpp"
 
 
-inline simd::Vector<float, 4> eucMod(simd::Vector<float, 4> a, simd::Vector<float, 4> b) {
-  simd::Vector<float, 4> mod = simd::fmod(a, b);
+inline simd::float_4 eucMod(simd::float_4 a, simd::float_4 b) {
+  simd::float_4 mod = simd::fmod(a, b);
   return simd::ifelse(mod < 0.f, mod + b, mod);
 }
 
+#define BLOCK_SIZE 4
 
-template <unsigned int SIZE, unsigned int BLOCK_SIZE>
+template <unsigned int SIZE>
 struct Pattern {
   /* Pattern settings */
   unsigned int resolution = SIZE;
@@ -20,31 +21,31 @@ struct Pattern {
   unsigned int blockSize = BLOCK_SIZE;
   float baseStepLen = 1.f / SIZE;
 
-  simd::Vector<float, BLOCK_SIZE> hitsTemp[SIZE / BLOCK_SIZE];
+  simd::float_4 hitsTemp[SIZE / BLOCK_SIZE];
 
   /* Step attributes, mutations and gates */
-  simd::Vector<float, BLOCK_SIZE> stepBases[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE];
-  simd::Vector<float, BLOCK_SIZE> stepMutas[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE];
-  simd::Vector<float, BLOCK_SIZE> stepGates[SIZE / BLOCK_SIZE];
-  simd::Vector<float, BLOCK_SIZE> stepIns[SIZE / BLOCK_SIZE];
+  simd::float_4 stepBases[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE];
+  simd::float_4 stepMutas[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE];
+  simd::float_4 stepGates[SIZE / BLOCK_SIZE];
+  simd::float_4 stepIns[SIZE / BLOCK_SIZE];
 
-  simd::Vector<float, BLOCK_SIZE> stepInsComputed[SIZE / BLOCK_SIZE];
-  simd::Vector<float, BLOCK_SIZE> stepOutsComputed[SIZE / BLOCK_SIZE];
+  simd::float_4 stepInsComputed[SIZE / BLOCK_SIZE];
+  simd::float_4 stepOutsComputed[SIZE / BLOCK_SIZE];
 
-  simd::Vector<float, BLOCK_SIZE> stepAttrDefaults[STEP_ATTRS_TOTAL] = {
-    simd::Vector<float, BLOCK_SIZE>(0.f),
-    simd::Vector<float, BLOCK_SIZE>(1.f / SIZE),
-    simd::Vector<float, BLOCK_SIZE>(0.f),
-    simd::Vector<float, BLOCK_SIZE>(0.f),
-    simd::Vector<float, BLOCK_SIZE>(0.f),
-    simd::Vector<float, BLOCK_SIZE>(0.f),
-    simd::Vector<float, BLOCK_SIZE>(0.f),
+  simd::float_4 stepAttrDefaults[STEP_ATTRS_TOTAL] = {
+    simd::float_4(0.f),
+    simd::float_4(1.f / SIZE),
+    simd::float_4(0.f),
+    simd::float_4(0.f),
+    simd::float_4(0.f),
+    simd::float_4(0.f),
+    simd::float_4(0.f),
   };
 
   void findStepsForPhase(float phase) {
     for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
-      simd::Vector<float, BLOCK_SIZE> inMod = this->stepInsComputed[blockIdx];
-      simd::Vector<float, BLOCK_SIZE> outMod = this->stepOutsComputed[blockIdx];
+      simd::float_4 inMod = this->stepInsComputed[blockIdx];
+      simd::float_4 outMod = this->stepOutsComputed[blockIdx];
       this->hitsTemp[blockIdx] = (inMod <= phase) ^ (phase < outMod) ^ (inMod < outMod);
     }
   }
@@ -87,7 +88,6 @@ struct Pattern {
   }
 
   void dataFromJson(json_t *patternJ) {
-    this->init();
     this->resolution = json_number_value(json_object_get(patternJ, "resolution"));
     this->goTo = json_number_value(json_object_get(patternJ, "goTo"));
     this->shift = json_number_value(json_object_get(patternJ, "shift"));
@@ -97,9 +97,8 @@ struct Pattern {
       unsigned int stepInBlockIdx = stepIdx % BLOCK_SIZE;
       json_t *stepJ = json_array_get(stepsJ, stepIdx);
       bool gate = json_boolean_value(json_object_get(stepJ, "gate"));
-      std::cout << "Block has: " << simd::movemask(this->stepGates[blockIdx]) << std::endl;
       if (!gate) {
-        this->stepGates[blockIdx] ^= simd::movemaskInverse<simd::Vector<float, BLOCK_SIZE>>(1 << stepInBlockIdx);
+        this->stepGates[blockIdx] ^= simd::movemaskInverse<simd::float_4>(1 << stepInBlockIdx);
       }
       json_t *attrsJ = json_object_get(stepJ, "attrs");
       for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
@@ -108,16 +107,19 @@ struct Pattern {
         this->stepMutas[attrIdx][blockIdx][stepInBlockIdx] = json_number_value(json_object_get(attrJ, "mutation"));
       }
     }
+    for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+      this->recalcInOuts(blockIdx);
+    }
   }
 
   bool isClean() {
-    if (resolution != 8 || goTo != 1 || shift != 0.f) {
+    if (resolution != 8 || shift != 0.f) {
       return false;
     }
     for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
       for (unsigned int blockIdx = 0; blockIdx  < SIZE / BLOCK_SIZE; blockIdx++) {
-        if (simd::movemask(this->stepBases[attrIdx][blockIdx] != this->stepAttrDefaults[attrIdx]) != 0xffff ||
-            simd::movemask(this->stepMutas[attrIdx][blockIdx] != 0.f) != 0xffff) {
+        if (simd::movemask(this->stepBases[attrIdx][blockIdx] != this->stepAttrDefaults[attrIdx]) ||
+            simd::movemask(this->stepMutas[attrIdx][blockIdx] != 0.f)) {
           return false;
         }
       }
@@ -128,8 +130,8 @@ struct Pattern {
   bool hasCustomSteps() {
     for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
       for (unsigned int blockIdx = 0; blockIdx  < SIZE / BLOCK_SIZE; blockIdx++) {
-        if (simd::movemask(this->stepBases[attrIdx][blockIdx]) != simd::movemask(this->stepAttrDefaults[attrIdx]) ||
-            simd::movemask(this->stepMutas[attrIdx][blockIdx]) != 0) {
+        if (simd::movemask(this->stepBases[attrIdx][blockIdx] != this->stepAttrDefaults[attrIdx]) ||
+            simd::movemask(this->stepMutas[attrIdx][blockIdx] != 0.f)) {
           return true;
         }
       }

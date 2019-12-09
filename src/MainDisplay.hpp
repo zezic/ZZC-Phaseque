@@ -7,10 +7,9 @@
 #endif
 
 struct MainDisplayConsumer {
-  unsigned int resolution = 8;
   float phase = 0.f;
   int direction = 1;
-  Pattern<8, 4> pattern;
+  Pattern<8> pattern;
   bool globalGate = false;
   int polyphonyMode = 0;
   float exprCurveCV = 0.f;
@@ -88,7 +87,7 @@ struct MainDisplayWidget : BaseDisplayWidget {
   }
 
   void drawResolution(const DrawArgs &args) {
-    float resolutionVal = this->consumer->resolution;
+    float resolutionVal = this->consumer->pattern.resolution;
     float phaseVal = this->consumer->phase;
     nvgStrokeWidth(args.vg, 1.0f);
     float periodSize = area.x / resolutionVal;

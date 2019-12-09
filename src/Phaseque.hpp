@@ -150,10 +150,10 @@ struct Phaseque : Module {
     NUM_LIGHTS
   };
 
-  Pattern<8, 4> patterns[NUM_PATTERNS];
+  Pattern<8> patterns[NUM_PATTERNS];
   unsigned int patternIdx = 0;
   unsigned int lastPatternIdx = 0;
-  Pattern<8, 4> pattern = patterns[patternIdx];
+  Pattern<8> pattern = patterns[patternIdx];
   Step* activeStep = nullptr;
   Step* lastActiveStep = nullptr;
   int goToRequest = 0;
