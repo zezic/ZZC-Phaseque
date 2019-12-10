@@ -21,6 +21,11 @@ struct Pattern {
   unsigned int blockSize = BLOCK_SIZE;
   float baseStepLen = 1.f / SIZE;
 
+  unsigned int activeStepIdx = 0;
+  unsigned int activeBlockMask = 0;
+  unsigned int activeBlockIdx = 0;
+  bool hasActiveStep = false;
+
   simd::float_4 hitsTemp[SIZE / BLOCK_SIZE];
 
   /* Step attributes, mutations and gates */
@@ -43,10 +48,28 @@ struct Pattern {
   };
 
   void findStepsForPhase(float phase) {
+    /* Search for phase-step intersection */
     for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
       simd::float_4 inMod = this->stepInsComputed[blockIdx];
       simd::float_4 outMod = this->stepOutsComputed[blockIdx];
       this->hitsTemp[blockIdx] = (inMod <= phase) ^ (phase < outMod) ^ (inMod < outMod);
+    }
+  }
+
+  void findMonoStep() {
+    static int masks[4] = { 1, 2, 4, 8 };
+    for (unsigned int blockIdx = SIZE / BLOCK_SIZE - 1; blockIdx >= 0; blockIdx--) {
+      int blockMask = simd::movemask(this->hitsTemp[blockIdx]);
+      if (blockMask == 0) { continue; } // No hits in this block
+      for (unsigned int stepInBlockIdx = 3; stepInBlockIdx >= 0; stepInBlockIdx--) {
+        if (masks[stepInBlockIdx] & blockMask) {
+          this->hasActiveStep = true;
+          this->activeStepIdx = blockIdx * BLOCK_SIZE + stepInBlockIdx;
+          this->activeBlockMask = masks[stepInBlockIdx];
+          this->activeBlockIdx = blockIdx;
+          return;
+        }
+      }
     }
   }
 

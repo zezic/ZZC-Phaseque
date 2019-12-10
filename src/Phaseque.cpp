@@ -365,7 +365,9 @@ void Phaseque::processIndicators() {
   for (unsigned int stepIdx = 0; stepIdx < this->pattern.size; stepIdx++) {
     unsigned int blockIdx = stepIdx / 4;
     unsigned int stepInBlockIdx = stepIdx % 4;
-    lights[STEP_GATE_LIGHT + stepIdx].setBrightness(simd::movemask(this->pattern.hitsTemp[blockIdx]) & 1 << stepInBlockIdx);
+  //   For multi-step
+  //   lights[STEP_GATE_LIGHT + stepIdx].setBrightness(simd::movemask(this->pattern.hitsTemp[blockIdx]) & 1 << stepInBlockIdx);
+    lights[STEP_GATE_LIGHT + stepIdx].setBrightness(this->pattern.hasActiveStep && this->pattern.activeStepIdx == stepIdx ? 1.f : 0.f);
     lights[GATE_SWITCH_LED + stepIdx].setBrightness((simd::movemask(this->pattern.stepGates[blockIdx]) & 1 << stepInBlockIdx) ^ !globalGate);
   }
 
@@ -775,6 +777,7 @@ void Phaseque::process(const ProcessArgs &args) {
   outputs[PTRN_PHASE_OUTPUT].setVoltage(phaseShifted * 10.f);
 
   this->pattern.findStepsForPhase(this->phaseShifted);
+  this->pattern.findMonoStep();
 
   this->processIndicators();
 
