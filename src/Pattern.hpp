@@ -1,4 +1,5 @@
 #pragma once
+#include <bitset>
 #include "ZZC.hpp"
 #include "Step.hpp"
 
@@ -22,8 +23,10 @@ struct Pattern {
   float baseStepLen = 1.f / SIZE;
 
   unsigned int activeStepIdx = 0;
-  unsigned int activeBlockMask = 0;
+  unsigned int lastActiveStepIdx = 0;
   unsigned int activeBlockIdx = 0;
+  unsigned int activeStepInBlockIdx = 0;
+  int activeBlockMask = 0;
   bool hasActiveStep = false;
 
   simd::float_4 hitsTemp[SIZE / BLOCK_SIZE];
@@ -57,20 +60,25 @@ struct Pattern {
   }
 
   void findMonoStep() {
-    static int masks[4] = { 1, 2, 4, 8 };
-    for (unsigned int blockIdx = SIZE / BLOCK_SIZE - 1; blockIdx >= 0; blockIdx--) {
-      int blockMask = simd::movemask(this->hitsTemp[blockIdx]);
+    this->lastActiveStepIdx = this->activeStepIdx;
+    for (unsigned int blockOffset = 0; blockOffset < SIZE / BLOCK_SIZE; blockOffset++) {
+      unsigned int blockIdx = SIZE / BLOCK_SIZE - blockOffset - 1;
+      int blockMask = simd::movemask(this->hitsTemp[blockIdx] & this->stepGates[blockIdx]);
       if (blockMask == 0) { continue; } // No hits in this block
-      for (unsigned int stepInBlockIdx = 3; stepInBlockIdx >= 0; stepInBlockIdx--) {
-        if (masks[stepInBlockIdx] & blockMask) {
+      for (unsigned int stepInBlockOffset = 0; stepInBlockOffset < BLOCK_SIZE; stepInBlockOffset++) {
+        unsigned int stepInBlockIdx = BLOCK_SIZE - stepInBlockOffset - 1;
+        int maskToCompare = 1 << stepInBlockIdx;
+        if (blockMask & maskToCompare) {
           this->hasActiveStep = true;
           this->activeStepIdx = blockIdx * BLOCK_SIZE + stepInBlockIdx;
-          this->activeBlockMask = masks[stepInBlockIdx];
+          this->activeStepInBlockIdx = stepInBlockIdx;
+          this->activeBlockMask = 1 << stepInBlockIdx;
           this->activeBlockIdx = blockIdx;
           return;
         }
       }
     }
+    this->hasActiveStep = false;
   }
 
   void recalcInOuts(unsigned int blockIdx) {

@@ -11,7 +11,7 @@ struct MainDisplayConsumer {
   int direction = 1;
   Pattern<8> pattern;
   bool globalGate = false;
-  int polyphonyMode = 0;
+  int polyphonyMode = PolyphonyModes::MONOPHONIC;
   float exprCurveCV = 0.f;
   float exprPowerCV = 0.f;
 
@@ -171,7 +171,12 @@ struct MainDisplayWidget : BaseDisplayWidget {
       unsigned int blockIdx = stepIdx / 4;
       unsigned int stepInBlockIdx = stepIdx % 4;
       bool gate = (simd::movemask(this->consumer->pattern.stepGates[blockIdx]) & 1 << stepInBlockIdx) ^ !this->consumer->globalGate;
-      bool active = simd::movemask(this->consumer->pattern.hitsTemp[blockIdx]) & 1 << stepInBlockIdx;
+      bool active = false;
+      if (this->consumer->polyphonyMode == PolyphonyModes::MONOPHONIC) {
+        active = this->consumer->pattern.hasActiveStep && (this->consumer->pattern.activeStepIdx == stepIdx);
+      } else {
+        active = simd::movemask(this->consumer->pattern.hitsTemp[blockIdx]) & 1 << stepInBlockIdx;
+      }
       if (active) {
         nvgStrokeColor(args.vg, lcdActiveColor);
         nvgFillColor(args.vg, lcdActiveColor);

@@ -365,16 +365,20 @@ void Phaseque::processIndicators() {
   for (unsigned int stepIdx = 0; stepIdx < this->pattern.size; stepIdx++) {
     unsigned int blockIdx = stepIdx / 4;
     unsigned int stepInBlockIdx = stepIdx % 4;
-  //   For multi-step
-  //   lights[STEP_GATE_LIGHT + stepIdx].setBrightness(simd::movemask(this->pattern.hitsTemp[blockIdx]) & 1 << stepInBlockIdx);
-    lights[STEP_GATE_LIGHT + stepIdx].setBrightness(this->pattern.hasActiveStep && this->pattern.activeStepIdx == stepIdx ? 1.f : 0.f);
-    lights[GATE_SWITCH_LED + stepIdx].setBrightness((simd::movemask(this->pattern.stepGates[blockIdx]) & 1 << stepInBlockIdx) ^ !globalGate);
+
+    // For multi-step
+    if (this->polyphonyMode == PolyphonyModes::MONOPHONIC) {
+      lights[STEP_GATE_LIGHT + stepIdx].setBrightness(
+        this->pattern.hasActiveStep && (this->pattern.activeStepIdx == stepIdx) ? 1.f : 0.f
+      );
+    } else {
+      lights[STEP_GATE_LIGHT + stepIdx].setBrightness(
+        simd::movemask(this->pattern.hitsTemp[blockIdx]) & 1 << stepInBlockIdx ? 1.f : 0.f
+      );
+    }
+
+    lights[GATE_SWITCH_LED + stepIdx].setBrightness((simd::movemask(this->pattern.stepGates[blockIdx]) & (1 << stepInBlockIdx)) ^ !globalGate);
   }
-
-  // TODO: Implement this
-  // for (int i = 0; i < NUM_STEPS; i++) {
-  // }
-
 
   if (this->wait) {
     lights[WAIT_LED].value = 1.1f;
@@ -413,20 +417,30 @@ void Phaseque::processIndicators() {
   lights[PHASE_LIGHT].setBrightness(stepPhase);
 }
 
-void Phaseque::triggerIfBetween(float from, float to) {
-  // TODO: Implement this
-  // if (!activeStep) {
-  //   return;
-  // }
-  // for (int i = 0; i < NUM_STEPS; i++) {
-  //   if (activeStep->idx != i) { continue; }
-  //   if (!pattern.steps[i].gate ^ !globalGate) { continue; }
-  //   float retrigWrapped = fastmod(direction == 1 ? pattern.steps[i].in() : pattern.steps[i].out(), 1.0);
-  //   if (from <= retrigWrapped && retrigWrapped < to) {
-  //     retrigGapGenerator.trigger(1e-4f);
-  //     break;
-  //   }
-  // }
+void Phaseque::renderStepMono() {
+  unsigned int stepInBlockIdx = this->pattern.activeStepInBlockIdx;
+  float v[4];
+  this->pattern.stepBases[StepAttr::STEP_VALUE][this->pattern.activeBlockIdx].store(v);
+  float shift[4];
+  this->pattern.stepBases[StepAttr::STEP_SHIFT][this->pattern.activeBlockIdx].store(shift);
+  float len[4];
+  this->pattern.stepBases[StepAttr::STEP_LEN][this->pattern.activeBlockIdx].store(len);
+
+  // Calculating the step phase
+  float stepIn[4];
+  this->pattern.stepInsComputed[this->pattern.activeBlockIdx].store(stepIn);
+  float stepPhase = (this->phaseShifted - (stepIn[stepInBlockIdx] - (this->phaseShifted < stepIn[stepInBlockIdx] ? 1.f : 0.f))) / len[stepInBlockIdx];
+
+  // float expr = step->expr(stepPhase);
+  float curve[4];
+  this->pattern.stepBases[StepAttr::STEP_EXPR_CURVE][this->pattern.activeBlockIdx].store(curve);
+
+  outputs[V_OUTPUT].setVoltage(v[stepInBlockIdx]);
+  outputs[SHIFT_OUTPUT].setVoltage(shift[stepInBlockIdx] / this->pattern.baseStepLen * 5.f);
+  outputs[LEN_OUTPUT].setVoltage((len[stepInBlockIdx] / this->pattern.baseStepLen - 1.f) * 5.f);
+  // outputs[EXPR_OUTPUT].setVoltage(expr * 5.0f, channel);
+  outputs[EXPR_CURVE_OUTPUT].setVoltage(curve[stepInBlockIdx] * 5.f);
+  outputs[PHASE_OUTPUT].setVoltage(stepPhase * 10.f);
 }
 
 void Phaseque::renderStep(Step *step, int channel) {
@@ -680,9 +694,10 @@ void Phaseque::process(const ProcessArgs &args) {
   this->processTransport(phaseWasZeroed, sampleTime);
   this->findActiveSteps();
 
-  if ((activeStep && lastActiveStep) && activeStep != lastActiveStep) {
+  if (this->polyphonyMode == PolyphonyModes::MONOPHONIC && (this->pattern.activeStepIdx != this->pattern.lastActiveStepIdx)) {
     retrigGapGenerator.trigger(1e-4f);
   }
+
   lastActiveStep = activeStep;
 
   outputs[PTRN_START_OUTPUT].setVoltage(ptrnStartPulseGenerator.process(sampleTime) ? 10.0f : 0.0f);
@@ -703,14 +718,24 @@ void Phaseque::process(const ProcessArgs &args) {
   }
 
   retrigGap = retrigGapGenerator.process(sampleTime);
-  if (polyphonyMode == MONOPHONIC) {
-    if (retrigGap || !clutch) {
-      outputs[GATE_OUTPUT].setVoltage(0.0f);
-    } else {
-      outputs[GATE_OUTPUT].setVoltage(activeStep ? 10.0f : 0.0f);
+
+  outputs[PTRN_PHASE_OUTPUT].setVoltage(phaseShifted * 10.f);
+
+  this->pattern.findStepsForPhase(this->phaseShifted);
+  this->pattern.findMonoStep();
+
+  int channels = this->polyphonyMode == PolyphonyModes::MONOPHONIC ? 1 : this->polyphonyMode == PolyphonyModes::POLYPHONIC ? NUM_STEPS : NUM_STEPS * 2;
+
+  if (this->polyphonyMode == PolyphonyModes::MONOPHONIC) {
+    for (int i = 0; i < NUM_STEPS; i++) {
+      outputs[STEP_GATE_OUTPUT + i].setVoltage(0.f);
     }
-  }
-  if (polyphonyMode == POLYPHONIC || polyphonyMode == UNISON) {
+    if (this->pattern.hasActiveStep) {
+      this->renderStepMono();
+      outputs[STEP_GATE_OUTPUT + this->pattern.activeStepIdx].setVoltage(10.f);
+    }
+    outputs[GATE_OUTPUT].setVoltage(this->clutch && this->pattern.hasActiveStep && !retrigGap ? 10.f : 0.f);
+  } else {
     for (int i = 0; i < NUM_STEPS; i++) {
       if (stepsStates[i]) {
         // TODO: Enable this
@@ -735,49 +760,15 @@ void Phaseque::process(const ProcessArgs &args) {
         }
       }
     }
-    if (polyphonyMode == UNISON) {
-      outputs[GATE_OUTPUT].setChannels(NUM_STEPS * 2);
-      outputs[V_OUTPUT].setChannels(NUM_STEPS * 2);
-      outputs[SHIFT_OUTPUT].setChannels(NUM_STEPS * 2);
-      outputs[LEN_OUTPUT].setChannels(NUM_STEPS * 2);
-      outputs[EXPR_OUTPUT].setChannels(NUM_STEPS * 2);
-      outputs[EXPR_CURVE_OUTPUT].setChannels(NUM_STEPS * 2);
-      outputs[PHASE_OUTPUT].setChannels(NUM_STEPS * 2);
-    } else {
-      outputs[GATE_OUTPUT].setChannels(NUM_STEPS);
-      outputs[V_OUTPUT].setChannels(NUM_STEPS);
-      outputs[SHIFT_OUTPUT].setChannels(NUM_STEPS);
-      outputs[LEN_OUTPUT].setChannels(NUM_STEPS);
-      outputs[EXPR_OUTPUT].setChannels(NUM_STEPS);
-      outputs[EXPR_CURVE_OUTPUT].setChannels(NUM_STEPS);
-      outputs[PHASE_OUTPUT].setChannels(NUM_STEPS);
-    }
-
-  } else {
-    if (activeStep) {
-      renderStep(activeStep, 0);
-      outputs[GATE_OUTPUT].setChannels(1);
-      outputs[V_OUTPUT].setChannels(1);
-      outputs[SHIFT_OUTPUT].setChannels(1);
-      outputs[LEN_OUTPUT].setChannels(1);
-      outputs[EXPR_OUTPUT].setChannels(1);
-      outputs[EXPR_CURVE_OUTPUT].setChannels(1);
-      outputs[PHASE_OUTPUT].setChannels(1);
-
-      for (int i = 0; i < NUM_STEPS; i++) {
-        outputs[STEP_GATE_OUTPUT + i].setVoltage(activeStep->idx == i ? 10.f : 0.f);
-      }
-    } else {
-      for (int i = 0; i < NUM_STEPS; i++) {
-        outputs[STEP_GATE_OUTPUT + i].setVoltage(0.f);
-      }
-    }
   }
 
-  outputs[PTRN_PHASE_OUTPUT].setVoltage(phaseShifted * 10.f);
-
-  this->pattern.findStepsForPhase(this->phaseShifted);
-  this->pattern.findMonoStep();
+  outputs[GATE_OUTPUT].setChannels(channels);
+  outputs[V_OUTPUT].setChannels(channels);
+  outputs[SHIFT_OUTPUT].setChannels(channels);
+  outputs[LEN_OUTPUT].setChannels(channels);
+  outputs[EXPR_OUTPUT].setChannels(channels);
+  outputs[EXPR_CURVE_OUTPUT].setChannels(channels);
+  outputs[PHASE_OUTPUT].setChannels(channels);
 
   this->processIndicators();
 

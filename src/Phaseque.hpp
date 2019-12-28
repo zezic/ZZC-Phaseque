@@ -276,8 +276,7 @@ struct Phaseque : Module {
 
   void processTransport(bool phaseWasZeroed, float sampleTime);
 
-  void triggerIfBetween(float from, float to);
-
+  void renderStepMono();
   void renderStep(Step *step, int channel);
   void renderUnison(Step *step, int channel);
 
