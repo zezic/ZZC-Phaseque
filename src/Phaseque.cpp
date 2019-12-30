@@ -425,14 +425,14 @@ inline simd::float_4 blockExpressions(
   simd::float_4 phase
 ) {
   simd::float_4 isRising = exprOut > exprIn;
-  simd::float_4 curveUp = exprCurve > 0.f;
-  simd::float_4 invertPower = ~(isRising ^ curveUp);
+  simd::float_4 curveBendedUp = exprCurve > 0.f;
+  simd::float_4 invertPower = ~(isRising ^ curveBendedUp);
   simd::float_4 finalPhase = simd::ifelse(invertPower, 1.f - phase, phase);
   simd::float_4 finalPower = 2.f + simd::ifelse(invertPower, -exprPower, exprPower);
-  simd::float_4 exprAmplitude = exprOut - exprIn;
   simd::float_4 powOutput = simd::pow(finalPhase, finalPower);
   simd::float_4 exprResult = simd::ifelse(invertPower, 1.f - powOutput, powOutput);
   simd::float_4 exprMix = simd::crossfade(phase, exprResult, simd::abs(exprCurve));
+  simd::float_4 exprAmplitude = exprOut - exprIn;
   simd::float_4 exprScaled = exprIn + exprMix * exprAmplitude;
   return exprScaled;
 }
