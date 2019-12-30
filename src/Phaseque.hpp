@@ -189,7 +189,6 @@ struct Phaseque : Module {
   dsp::SchmittTrigger rightInputTrigger;
 
   dsp::PulseGenerator retrigGapGenerator;
-  bool retrigGap = false;
 
   dsp::SchmittTrigger globalGateButtonTrigger;
   bool globalGate = true;

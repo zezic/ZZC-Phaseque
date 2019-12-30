@@ -417,6 +417,26 @@ void Phaseque::processIndicators() {
   lights[PHASE_LIGHT].setBrightness(stepPhase);
 }
 
+inline simd::float_4 blockExpressions(
+  simd::float_4 exprIn,
+  simd::float_4 exprOut,
+  simd::float_4 exprPower,
+  simd::float_4 exprCurve,
+  simd::float_4 phase
+) {
+  simd::float_4 isRising = exprOut > exprIn;
+  simd::float_4 curveUp = exprCurve > 0.f;
+  simd::float_4 invertPower = ~(isRising ^ curveUp);
+  simd::float_4 finalPhase = simd::ifelse(invertPower, 1.f - phase, phase);
+  simd::float_4 finalPower = 2.f + simd::ifelse(invertPower, -exprPower, exprPower);
+  simd::float_4 exprAmplitude = exprOut - exprIn;
+  simd::float_4 powOutput = simd::pow(finalPhase, finalPower);
+  simd::float_4 exprResult = simd::ifelse(invertPower, 1.f - powOutput, powOutput);
+  simd::float_4 exprMix = simd::crossfade(phase, exprResult, simd::abs(exprCurve));
+  simd::float_4 exprScaled = exprIn + exprMix * exprAmplitude;
+  return exprScaled;
+}
+
 void Phaseque::renderStepMono() {
   unsigned int stepInBlockIdx = this->pattern.activeStepInBlockIdx;
   float v[4];
@@ -427,20 +447,31 @@ void Phaseque::renderStepMono() {
   this->pattern.stepBases[StepAttr::STEP_LEN][this->pattern.activeBlockIdx].store(len);
 
   // Calculating the step phase
-  float stepIn[4];
-  this->pattern.stepInsComputed[this->pattern.activeBlockIdx].store(stepIn);
-  float stepPhase = (this->phaseShifted - (stepIn[stepInBlockIdx] - (this->phaseShifted < stepIn[stepInBlockIdx] ? 1.f : 0.f))) / len[stepInBlockIdx];
+  simd::float_4 patternPhase(phaseShifted);
+  simd::float_4 stepIns = this->pattern.stepInsComputed[this->pattern.activeBlockIdx];
+  simd::float_4 stepPhases = (patternPhase - simd::ifelse(patternPhase < stepIns, stepIns - 1.f, stepIns)) / this->pattern.stepBases[StepAttr::STEP_LEN][this->pattern.activeBlockIdx];
 
-  // float expr = step->expr(stepPhase);
+  float stepPhasesScalar[4];
+  stepPhases.store(stepPhasesScalar);
+
   float curve[4];
   this->pattern.stepBases[StepAttr::STEP_EXPR_CURVE][this->pattern.activeBlockIdx].store(curve);
+
+  float expressions[4];
+  blockExpressions(
+    this->pattern.stepBases[StepAttr::STEP_EXPR_IN][this->pattern.activeBlockIdx],
+    this->pattern.stepBases[StepAttr::STEP_EXPR_OUT][this->pattern.activeBlockIdx],
+    this->pattern.stepBases[StepAttr::STEP_EXPR_POWER][this->pattern.activeBlockIdx],
+    this->pattern.stepBases[StepAttr::STEP_EXPR_CURVE][this->pattern.activeBlockIdx],
+    stepPhases
+  ).store(expressions);
 
   outputs[V_OUTPUT].setVoltage(v[stepInBlockIdx]);
   outputs[SHIFT_OUTPUT].setVoltage(shift[stepInBlockIdx] / this->pattern.baseStepLen * 5.f);
   outputs[LEN_OUTPUT].setVoltage((len[stepInBlockIdx] / this->pattern.baseStepLen - 1.f) * 5.f);
-  // outputs[EXPR_OUTPUT].setVoltage(expr * 5.0f, channel);
+  outputs[EXPR_OUTPUT].setVoltage(expressions[stepInBlockIdx] * 5.f);
   outputs[EXPR_CURVE_OUTPUT].setVoltage(curve[stepInBlockIdx] * 5.f);
-  outputs[PHASE_OUTPUT].setVoltage(stepPhase * 10.f);
+  outputs[PHASE_OUTPUT].setVoltage(stepPhases[stepInBlockIdx] * 10.f);
 }
 
 void Phaseque::renderStep(Step *step, int channel) {
@@ -629,24 +660,6 @@ void Phaseque::processTransport(bool phaseWasZeroed, float sampleTime) {
   }
 }
 
-void Phaseque::findActiveSteps() {
-  // TODO: Implement this
-  // if (this->polyphonyMode == PolyphonyModes::POLYPHONIC) {
-  //   this->activeStep = nullptr;
-  //   this->pattern.updateStepsStates(phaseShifted, globalGate, stepsStates, false);
-  // } else if (polyphonyMode == PolyphonyModes::UNISON) {
-  //   this->activeStep = nullptr;
-  //   this->pattern.updateStepsStates(phaseShifted, globalGate, stepsStates, false);
-  //   this->pattern.updateStepsStates(phaseShifted, globalGate, unisonStates, true);
-  // } else {
-  //   activeStep = pattern.getStepForPhase(phaseShifted, globalGate);
-  //   for (int i = 0; i < NUM_STEPS; i++) {
-  //     stepsStates[i] = false;
-  //     unisonStates[i] = false;
-  //   }
-  // }
-}
-
 void Phaseque::feedDisplays() {
   if (this->gridDisplayConsumer->consumed) {
     this->gridDisplayConsumer->currentPattern = this->patternIdx;
@@ -692,11 +705,6 @@ void Phaseque::process(const ProcessArgs &args) {
 
   this->processJumpInputs();
   this->processTransport(phaseWasZeroed, sampleTime);
-  this->findActiveSteps();
-
-  if (this->polyphonyMode == PolyphonyModes::MONOPHONIC && (this->pattern.activeStepIdx != this->pattern.lastActiveStepIdx)) {
-    retrigGapGenerator.trigger(1e-4f);
-  }
 
   lastActiveStep = activeStep;
 
@@ -717,8 +725,6 @@ void Phaseque::process(const ProcessArgs &args) {
     retrigGapGenerator.trigger(1e-4f);
   }
 
-  retrigGap = retrigGapGenerator.process(sampleTime);
-
   outputs[PTRN_PHASE_OUTPUT].setVoltage(phaseShifted * 10.f);
 
   this->pattern.findStepsForPhase(this->phaseShifted);
@@ -731,9 +737,13 @@ void Phaseque::process(const ProcessArgs &args) {
       outputs[STEP_GATE_OUTPUT + i].setVoltage(0.f);
     }
     if (this->pattern.hasActiveStep) {
+      if (this->pattern.activeStepIdx != this->pattern.lastActiveStepIdx) {
+        retrigGapGenerator.trigger(1e-4f);
+      }
       this->renderStepMono();
       outputs[STEP_GATE_OUTPUT + this->pattern.activeStepIdx].setVoltage(10.f);
     }
+    bool retrigGap = retrigGapGenerator.process(sampleTime);
     outputs[GATE_OUTPUT].setVoltage(this->clutch && this->pattern.hasActiveStep && !retrigGap ? 10.f : 0.f);
   } else {
     for (int i = 0; i < NUM_STEPS; i++) {
