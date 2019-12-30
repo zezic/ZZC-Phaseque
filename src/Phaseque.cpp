@@ -428,7 +428,8 @@ inline simd::float_4 blockExpressions(
   simd::float_4 curveBendedUp = exprCurve > 0.f;
   simd::float_4 invertPower = ~(isRising ^ curveBendedUp);
   simd::float_4 finalPhase = simd::ifelse(invertPower, 1.f - phase, phase);
-  simd::float_4 finalPower = 2.f + simd::ifelse(invertPower, -exprPower, exprPower);
+  // Our target is between x^2 and x^8
+  simd::float_4 finalPower = 5.f + simd::ifelse(invertPower, -exprPower, exprPower) * 3.f;
   simd::float_4 powOutput = simd::pow(finalPhase, finalPower);
   simd::float_4 exprResult = simd::ifelse(invertPower, 1.f - powOutput, powOutput);
   simd::float_4 exprMix = simd::crossfade(phase, exprResult, simd::abs(exprCurve));
