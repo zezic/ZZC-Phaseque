@@ -366,7 +366,6 @@ void Phaseque::processIndicators() {
     unsigned int blockIdx = stepIdx / 4;
     unsigned int stepInBlockIdx = stepIdx % 4;
 
-    // For multi-step
     if (this->polyphonyMode == PolyphonyModes::MONOPHONIC) {
       lights[STEP_GATE_LIGHT + stepIdx].setBrightness(
         this->pattern.hasActiveStep && (this->pattern.activeStepIdx == stepIdx) ? 1.f : 0.f
@@ -417,7 +416,7 @@ void Phaseque::processIndicators() {
   lights[PHASE_LIGHT].setBrightness(stepPhase);
 }
 
-inline simd::float_4 blockExpressions(
+inline simd::float_4 getBlockExpressions(
   simd::float_4 exprIn,
   simd::float_4 exprOut,
   simd::float_4 exprPower,
@@ -459,7 +458,7 @@ void Phaseque::renderStepMono() {
   this->pattern.stepBases[StepAttr::STEP_EXPR_CURVE][this->pattern.activeBlockIdx].store(curve);
 
   float expressions[4];
-  blockExpressions(
+  getBlockExpressions(
     this->pattern.stepBases[StepAttr::STEP_EXPR_IN][this->pattern.activeBlockIdx],
     this->pattern.stepBases[StepAttr::STEP_EXPR_OUT][this->pattern.activeBlockIdx],
     this->pattern.stepBases[StepAttr::STEP_EXPR_POWER][this->pattern.activeBlockIdx],

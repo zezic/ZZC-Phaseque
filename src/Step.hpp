@@ -27,6 +27,7 @@ struct AttrDefaults {
 };
 
 inline AttrDefaults getAttrDefaults(int idx) {
+  assert(idx >= 0 && idx < STEP_ATTRS_TOTAL);
   switch(idx) {
     case STEP_VALUE: return AttrDefaults {0.0f, -2.0f, 2.0f, 0.2f};
     case STEP_LEN: return AttrDefaults {baseStepLen, 0.0f, baseStepLen * 2.0f, 1.0f};

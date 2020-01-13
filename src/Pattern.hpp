@@ -37,6 +37,9 @@ struct Pattern {
   simd::float_4 stepGates[SIZE / BLOCK_SIZE];
   simd::float_4 stepIns[SIZE / BLOCK_SIZE];
 
+  simd::float_4 stepMutaVectors[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE];
+  simd::float_4 stepBasesComputed[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE];
+
   simd::float_4 stepInsComputed[SIZE / BLOCK_SIZE];
   simd::float_4 stepOutsComputed[SIZE / BLOCK_SIZE];
 
@@ -48,6 +51,16 @@ struct Pattern {
     simd::float_4(0.f),
     simd::float_4(0.f),
     simd::float_4(0.f),
+  };
+
+  std::pair<float, float> stepBounds[STEP_ATTRS_TOTAL] = {
+    { -2.0f, 2.0f },
+    { 0.0f, baseStepLen * 2.0f },
+    { -baseStepLen, baseStepLen },
+    { -1.0f, 1.0f },
+    { -1.0f, 1.0f },
+    { -1.0f, 1.0f },
+    { -1.0f, 1.0f }
   };
 
   void findStepsForPhase(float phase) {
@@ -195,7 +208,16 @@ struct Pattern {
   }
 
   void randomize() {
-    // TODO: Implement this
+    for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
+      std::pair<float, float> bounds = this->stepBounds[attrIdx];
+      float range = bounds.second - bounds.first;
+      for (unsigned int stepIdx = 0; stepIdx < SIZE; stepIdx++) {
+        unsigned int blockIdx = stepIdx / BLOCK_SIZE;
+        unsigned int stepInBlockIdx = stepIdx % BLOCK_SIZE;
+        float newValue = bounds.first + random::uniform() * range;
+        this->stepBases[attrIdx][blockIdx][stepInBlockIdx] = newValue;
+      }
+    }
   }
 
   void randomizeReso() {
