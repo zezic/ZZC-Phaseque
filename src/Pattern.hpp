@@ -9,6 +9,16 @@ inline simd::float_4 eucMod(simd::float_4 a, simd::float_4 b) {
   return simd::ifelse(mod < 0.f, mod + b, mod);
 }
 
+
+inline simd::float_4 createMask(int x) {
+	__m128i msk8421 = _mm_set_epi32(8, 4, 2, 1);
+	__m128i x_bc = _mm_set1_epi32(x);
+	__m128i t = _mm_and_si128(x_bc, msk8421);
+	return simd::float_4(_mm_castsi128_ps(_mm_cmpeq_epi32(msk8421, t)));
+}
+
+
+
 #define BLOCK_SIZE 4
 
 template <unsigned int SIZE>
@@ -217,6 +227,16 @@ struct Pattern {
         float newValue = bounds.first + random::uniform() * range;
         this->stepBases[attrIdx][blockIdx][stepInBlockIdx] = newValue;
       }
+    }
+    for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+      int randomMask = 0;
+      for (unsigned int stepInBlockIdx = 0; stepInBlockIdx < BLOCK_SIZE; stepInBlockIdx++) {
+        // 10% chance for disabled steps
+        if (random::uniform() > 0.1f) {
+          randomMask += 1 << stepInBlockIdx;
+        }
+      }
+      this->stepGates[blockIdx] = createMask(randomMask);
     }
   }
 
