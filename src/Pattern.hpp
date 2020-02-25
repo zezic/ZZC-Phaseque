@@ -3,12 +3,10 @@
 #include "ZZC.hpp"
 #include "Step.hpp"
 
-
 inline simd::float_4 eucMod(simd::float_4 a, simd::float_4 b) {
   simd::float_4 mod = simd::fmod(a, b);
   return simd::ifelse(mod < 0.f, mod + b, mod);
 }
-
 
 inline simd::float_4 createMask(int x) {
 	__m128i msk8421 = _mm_set_epi32(8, 4, 2, 1);
@@ -17,7 +15,13 @@ inline simd::float_4 createMask(int x) {
 	return simd::float_4(_mm_castsi128_ps(_mm_cmpeq_epi32(msk8421, t)));
 }
 
-
+simd::float_4 getBlockExpressions(
+  simd::float_4 exprIn,
+  simd::float_4 exprOut,
+  simd::float_4 exprPower,
+  simd::float_4 exprCurve,
+  simd::float_4 phase
+);
 
 #define BLOCK_SIZE 4
 
@@ -34,7 +38,7 @@ struct Pattern {
 
   unsigned int activeStepIdx = 0;
   unsigned int lastActiveStepIdx = 0;
-  unsigned int activeBlockIdx = 0;
+  unsigned int activeBlockIdx = -1;
   unsigned int activeStepInBlockIdx = 0;
   int activeBlockMask = 0;
   bool hasActiveStep = false;
@@ -43,15 +47,21 @@ struct Pattern {
 
   /* Step attributes, mutations and gates */
   simd::float_4 stepBases[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE];
-  simd::float_4 stepMutas[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE];
+  simd::float_4 stepMutas[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE] = {
+    simd::float_4(0.f)
+  };
   simd::float_4 stepGates[SIZE / BLOCK_SIZE];
   simd::float_4 stepIns[SIZE / BLOCK_SIZE];
 
-  simd::float_4 stepMutaVectors[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE];
-  simd::float_4 stepBasesComputed[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE];
+  simd::float_4 stepMutaVectors[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE] = {
+    simd::float_4(0.f)
+  };
+  simd::float_4 stepBasesMutated[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE];
 
   simd::float_4 stepInsComputed[SIZE / BLOCK_SIZE];
   simd::float_4 stepOutsComputed[SIZE / BLOCK_SIZE];
+  simd::float_4 stepMutaInsComputed[SIZE / BLOCK_SIZE];
+  simd::float_4 stepMutaOutsComputed[SIZE / BLOCK_SIZE];
 
   simd::float_4 stepAttrDefaults[STEP_ATTRS_TOTAL] = {
     simd::float_4(0.f),
@@ -63,7 +73,17 @@ struct Pattern {
     simd::float_4(0.f),
   };
 
-  std::pair<float, float> stepBounds[STEP_ATTRS_TOTAL] = {
+  simd::float_4 attrMutaMultipliers[STEP_ATTRS_TOTAL] = {
+    simd::float_4(1.0f),
+    simd::float_4(0.0f),
+    simd::float_4(0.0f),
+    simd::float_4(0.0f),
+    simd::float_4(0.0f),
+    simd::float_4(0.0f),
+    simd::float_4(0.0f),
+  };
+
+  std::pair<float, float> attrBounds[STEP_ATTRS_TOTAL] = {
     { -2.0f, 2.0f },
     { 0.0f, baseStepLen * 2.0f },
     { -baseStepLen, baseStepLen },
@@ -104,9 +124,16 @@ struct Pattern {
     this->hasActiveStep = false;
   }
 
+  void applyMutations(unsigned int attrIdx, unsigned int blockIdx) {
+    this->stepBasesMutated[attrIdx][blockIdx] = this->stepBases[attrIdx][blockIdx] + this->stepMutas[attrIdx][blockIdx];
+  }
+
   void recalcInOuts(unsigned int blockIdx) {
     this->stepInsComputed[blockIdx] = eucMod(this->stepIns[blockIdx] + this->stepBases[StepAttr::STEP_SHIFT][blockIdx], 1.f);
     this->stepOutsComputed[blockIdx] = eucMod(this->stepInsComputed[blockIdx] + this->stepBases[StepAttr::STEP_LEN][blockIdx], 1.f);
+
+    this->stepMutaInsComputed[blockIdx] = eucMod(this->stepIns[blockIdx] + this->stepBasesMutated[StepAttr::STEP_SHIFT][blockIdx], 1.f);
+    this->stepMutaOutsComputed[blockIdx] = eucMod(this->stepMutaInsComputed[blockIdx] + this->stepBasesMutated[StepAttr::STEP_LEN][blockIdx], 1.f);
   }
 
   json_t *dataToJson() {
@@ -204,6 +231,7 @@ struct Pattern {
       for (unsigned int blockIdx = 0; blockIdx  < SIZE / BLOCK_SIZE; blockIdx++) {
         this->stepBases[attrIdx][blockIdx] = this->stepAttrDefaults[attrIdx];
         this->stepMutas[attrIdx][blockIdx] = 0.f;
+        this->applyMutations(attrIdx, blockIdx);
       }
     }
     for (unsigned int stepIdx = 0; stepIdx < SIZE; stepIdx++) {
@@ -219,7 +247,7 @@ struct Pattern {
 
   void randomize() {
     for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
-      std::pair<float, float> bounds = this->stepBounds[attrIdx];
+      std::pair<float, float> bounds = this->attrBounds[attrIdx];
       float range = bounds.second - bounds.first;
       for (unsigned int stepIdx = 0; stepIdx < SIZE; stepIdx++) {
         unsigned int blockIdx = stepIdx / BLOCK_SIZE;
@@ -280,11 +308,43 @@ struct Pattern {
     }
   }
 
+  void mutateBlock(unsigned int blockIdx, unsigned int attrIdx, int mask, float factor, std::pair<float, float> bounds) {
+    // TODO: Clamp mutations
+    simd::float_4 factor_4 = factor;
+    float rnds[blockSize];
+    for (unsigned int i = 0; i < blockSize; i++) {
+      rnds[i] = random::uniform();
+    }
+    simd::float_4 rndOffset = (simd::float_4::load(rnds) - 0.5f) * 0.05f;
+    this->stepMutaVectors[attrIdx][blockIdx] = clamp(this->stepMutaVectors[attrIdx][blockIdx] + rndOffset, -1.f, 1.f);
+    simd::float_4 decreasedMutas = this->stepMutas[attrIdx][blockIdx] * 0.2f;
+    this->stepMutas[attrIdx][blockIdx] = simd::ifelse(
+      factor_4 < 0.f,
+      this->stepMutas[attrIdx][blockIdx] + this->stepMutas[attrIdx][blockIdx] * factor_4,
+      this->stepMutas[attrIdx][blockIdx] + this->stepMutaVectors[attrIdx][blockIdx] * factor_4 * this->attrMutaMultipliers[attrIdx]
+    );
+    std::cout << blockIdx << " " << attrIdx << "  ";
+    for (unsigned int i = 0; i < blockSize; i++) {
+      float x = this->stepMutas[attrIdx][blockIdx][i];
+      std::cout << x << "  ";
+    }
+    for (unsigned int i = 0; i < blockSize; i++) {
+      float x = decreasedMutas[i];
+      std::cout << x << "  ";
+    }
+    std::cout << std::endl;
+    this->applyMutations(attrIdx, blockIdx);
+    // this->recalcInOuts(blockIdx);
+  }
+
   void mutate(float factor) {
     // TODO: Implement this
-    // for (int i = 0; i < NUM_STEPS; i++) {
-    //   this->steps[i].mutate(factor);
-    // }
+    for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
+      std::pair<float, float> bounds = this->attrBounds[attrIdx];
+      for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+        this->mutateBlock(blockIdx, attrIdx, 0b1111, factor, bounds);
+      }
+    }
   }
   void scaleMutation(float factor) {
     // TODO: Implement this

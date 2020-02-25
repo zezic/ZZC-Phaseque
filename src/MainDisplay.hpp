@@ -104,20 +104,31 @@ struct MainDisplayWidget : BaseDisplayWidget {
     }
   }
 
-  // void drawExprCurve(const DrawArgs &args, float x1, float workArea, Step *step, bool mutated) {
-  //   float len = workArea * (mutated ? step->minLen(this->consumer->globalLen) : step->minLenBase(this->consumer->globalLen));
-  //   nvgBeginPath(args.vg);
-  //   for (float phase = 0.0f; phase <= 1.000f; phase += 0.025) {
-  //     float cx = x1 + len * phase;
-  //     float cy = mutated ? step->expr(phase, this->consumer->exprCurveCV, this->consumer->exprPowerCV) : step->exprBase(phase, this->consumer->exprCurveCV, this->consumer->exprPowerCV);
-  //     if (phase == 0.0f) {
-  //       nvgMoveTo(args.vg, cx, exprHorizont + 6 + stepY * cy * -0.5);
-  //       continue;
-  //     }
-  //     nvgLineTo(args.vg, cx, exprHorizont + 6 + stepY * cy * -0.5);
-  //   }
-  //   nvgStroke(args.vg);
-  // }
+  void drawExprCurve(const DrawArgs &args, float x1, float workArea, unsigned int stepIdx, bool mutated) {
+    unsigned int blockIdx = stepIdx / this->consumer->pattern.blockSize;
+    unsigned int stepInBlockIdx = stepIdx % this->consumer->pattern.blockSize;
+    float len = workArea * this->consumer->pattern.stepBases[StepAttr::STEP_LEN][blockIdx][stepInBlockIdx];
+    nvgBeginPath(args.vg);
+    for (unsigned int i = 0; i <= 100; i++) {
+      float phase = float(i) / 100.f;
+      float cx = x1 + len * phase;
+      float expressions[4];
+      getBlockExpressions(
+          this->consumer->pattern.stepBases[StepAttr::STEP_EXPR_IN][blockIdx],
+          this->consumer->pattern.stepBases[StepAttr::STEP_EXPR_OUT][blockIdx],
+          this->consumer->pattern.stepBases[StepAttr::STEP_EXPR_POWER][blockIdx],
+          this->consumer->pattern.stepBases[StepAttr::STEP_EXPR_CURVE][blockIdx],
+          simd::float_4(phase)
+      ).store(expressions);
+      float cy = expressions[stepInBlockIdx];
+      if (phase == 0.0f) {
+        nvgMoveTo(args.vg, cx, exprHorizont + 6 + stepY * cy * -0.5);
+        continue;
+      }
+      nvgLineTo(args.vg, cx, exprHorizont + 6 + stepY * cy * -0.5);
+    }
+    nvgStroke(args.vg);
+  }
 
   void drawStep(const DrawArgs &args, unsigned int stepIdx, bool mutated) {
     unsigned int blockIdx = stepIdx / this->consumer->pattern.blockSize;
@@ -127,11 +138,11 @@ struct MainDisplayWidget : BaseDisplayWidget {
     float workArea = area.x - 1;
     float start = padding;
     float end = padding + workArea;
-    float x1 = padding + workArea * this->consumer->pattern.stepInsComputed[blockIdx][stepInBlockIdx];
-    float x2 = padding + workArea * this->consumer->pattern.stepOutsComputed[blockIdx][stepInBlockIdx];
+    float x1 = padding + workArea * (mutated ? this->consumer->pattern.stepMutaInsComputed : this->consumer->pattern.stepInsComputed)[blockIdx][stepInBlockIdx];
+    float x2 = padding + workArea * (mutated ? this->consumer->pattern.stepMutaOutsComputed : this->consumer->pattern.stepOutsComputed)[blockIdx][stepInBlockIdx];
     float lineX1 = x1 + (dir == 1 ? radius * 1.8f : 0.f);
     float lineX2 = x2 - (dir == -1 ? radius * 1.8f : 0.f);
-    float y = padding + crossLine2 + -stepY * this->consumer->pattern.stepBases[StepAttr::STEP_VALUE][blockIdx][stepInBlockIdx];
+    float y = padding + crossLine2 + -stepY * (mutated ? this->consumer->pattern.stepBasesMutated : this->consumer->pattern.stepBases)[StepAttr::STEP_VALUE][blockIdx][stepInBlockIdx];
 
     // Step
     if (x2 >= x1) {
@@ -156,10 +167,10 @@ struct MainDisplayWidget : BaseDisplayWidget {
     nvgFill(args.vg);
 
     // Expression curve
-    // drawExprCurve(args, x1, workArea, step, mutated);
-    // if (x2 < x1) {
-    //   drawExprCurve(args, x1 - workArea - 1, workArea, step, mutated);
-    // }
+    this->drawExprCurve(args, x1, workArea, stepIdx, mutated);
+    if (x2 < x1) {
+      this->drawExprCurve(args, x1 - workArea - 1, workArea, stepIdx, mutated);
+    }
   }
 
   void drawSteps(const DrawArgs &args) {
@@ -189,6 +200,13 @@ struct MainDisplayWidget : BaseDisplayWidget {
       }
       this->drawStep(args, stepIdx, false);
     }
+
+    nvgStrokeColor(args.vg, lcdDimmedMutColor);
+    nvgFillColor(args.vg, lcdDimmedMutColor);
+    for (unsigned int stepIdx = 0; stepIdx < this->consumer->pattern.size; stepIdx++) {
+      this->drawStep(args, stepIdx, true);
+    }
+
   //   int polyphonyMode = this->consumer->polyphonyMode;
 
   //   for (int i = 0; i < NUM_STEPS; i++) {

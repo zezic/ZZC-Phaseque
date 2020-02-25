@@ -416,7 +416,7 @@ void Phaseque::processIndicators() {
   lights[PHASE_LIGHT].setBrightness(stepPhase);
 }
 
-inline simd::float_4 getBlockExpressions(
+simd::float_4 getBlockExpressions(
   simd::float_4 exprIn,
   simd::float_4 exprOut,
   simd::float_4 exprPower,
