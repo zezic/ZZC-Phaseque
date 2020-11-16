@@ -420,6 +420,18 @@ void Phaseque::processIndicators() {
   lights[PHASE_LIGHT].setBrightness(stepPhase);
 }
 
+
+// b must be from 2 to 8
+simd::float_4 interPow(simd::float_4 a, simd::float_4 b) {
+  simd::float_4 crfd = (b - 2.f) / 6.f;
+
+  simd::float_4 frst = a * a;
+  simd::float_4 scnd = frst * frst;
+  scnd = scnd * scnd;
+
+  return simd::crossfade(frst, scnd, crfd);
+}
+
 simd::float_4 getBlockExpressions(
   simd::float_4 exprIn,
   simd::float_4 exprOut,
@@ -433,7 +445,8 @@ simd::float_4 getBlockExpressions(
   simd::float_4 finalPhase = simd::ifelse(invertPower, 1.f - phase, phase);
   // Our target is between x^2 and x^8
   simd::float_4 finalPower = 5.f + simd::ifelse(invertPower, -exprPower, exprPower) * 3.f;
-  simd::float_4 powOutput = simd::ifelse(finalPhase > 0.f, simd::pow(finalPhase, finalPower), 0.f);
+  // simd::float_4 powOutput = simd::ifelse(finalPhase > 0.f, simd::pow(finalPhase, finalPower), 0.f);
+  simd::float_4 powOutput = interPow(finalPhase, finalPower);
   simd::float_4 exprResult = simd::ifelse(invertPower, 1.f - powOutput, powOutput);
   simd::float_4 exprMix = simd::crossfade(phase, exprResult, simd::abs(exprCurve));
   simd::float_4 exprAmplitude = exprOut - exprIn;

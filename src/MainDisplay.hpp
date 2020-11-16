@@ -120,7 +120,7 @@ struct MainDisplayWidget : BaseDisplayWidget {
     float len = workArea * ((mutated ? this->consumer->pattern.stepBasesMutated : this->consumer->pattern.stepBases)[StepAttr::STEP_LEN][blockIdx][stepInBlockIdx]);
     nvgBeginPath(args.vg);
 
-    unsigned int curveReso = 16;
+    unsigned int curveReso = 24;
     for (unsigned int i = 0; i <= curveReso; i++) {
       if (i % 2 != 0) { continue; }
       float phase = float(i) / float(curveReso);
