@@ -7,6 +7,6 @@
 tags
 .clang_complete
 compile_commands.json
-Phaseque.d
-ZZC.d
+*.d
 .vscode
+.ccls-cache

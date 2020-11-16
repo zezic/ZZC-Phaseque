@@ -276,8 +276,8 @@ struct Phaseque : Module {
   void processTransport(bool phaseWasZeroed, float sampleTime);
 
   void renderStepMono();
-  void renderStep(Step *step, int channel);
-  void renderUnison(Step *step, int channel);
+  void renderPolyphonic();
+  void renderUnison();
 
   struct PatternResoParamQuantity : ParamQuantity {
     void setValue(float value) override {
@@ -432,10 +432,12 @@ struct Phaseque : Module {
     // TODO: implement this
     unsigned int blockIdx = stepNumber / this->pattern.blockSize;
     unsigned int stepInBlockIdx = stepNumber % this->pattern.blockSize;
+
     this->pattern.stepBases[attr][blockIdx][stepInBlockIdx] = target;
     if (attr == StepAttr::STEP_SHIFT || attr == StepAttr::STEP_LEN) {
       this->pattern.recalcInOuts(blockIdx);
     }
+    this->pattern.applyMutations(attr, blockIdx);
     // this->pattern.steps[stepNumber].setAttrBase(attr, target);
     // this->showCustomSteps();
   }

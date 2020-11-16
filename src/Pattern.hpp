@@ -1,7 +1,10 @@
 #pragma once
 #include <bitset>
+#include <iomanip>
 #include "ZZC.hpp"
 #include "Step.hpp"
+#include "simd/functions.hpp"
+#include "simd/vector.hpp"
 
 inline simd::float_4 eucMod(simd::float_4 a, simd::float_4 b) {
   simd::float_4 mod = simd::fmod(a, b);
@@ -43,7 +46,8 @@ struct Pattern {
   int activeBlockMask = 0;
   bool hasActiveStep = false;
 
-  simd::float_4 hitsTemp[SIZE / BLOCK_SIZE];
+  simd::float_4 hits[SIZE / BLOCK_SIZE];
+  simd::float_4 hitsClean[SIZE / BLOCK_SIZE];
 
   /* Step attributes, mutations and gates */
   simd::float_4 stepBases[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE];
@@ -74,13 +78,13 @@ struct Pattern {
   };
 
   simd::float_4 attrMutaMultipliers[STEP_ATTRS_TOTAL] = {
+    simd::float_4(0.5f),
+    simd::float_4(0.1f),
+    simd::float_4(0.02f),
     simd::float_4(1.0f),
-    simd::float_4(0.0f),
-    simd::float_4(0.0f),
-    simd::float_4(0.0f),
-    simd::float_4(0.0f),
-    simd::float_4(0.0f),
-    simd::float_4(0.0f),
+    simd::float_4(1.0f),
+    simd::float_4(1.0f),
+    simd::float_4(1.0f)
   };
 
   std::pair<float, float> attrBounds[STEP_ATTRS_TOTAL] = {
@@ -96,9 +100,18 @@ struct Pattern {
   void findStepsForPhase(float phase) {
     /* Search for phase-step intersection */
     for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+      simd::float_4 inMod = this->stepMutaInsComputed[blockIdx];
+      simd::float_4 outMod = this->stepMutaOutsComputed[blockIdx];
+      this->hits[blockIdx] = (inMod <= phase) ^ (phase < outMod) ^ (inMod < outMod);
+    }
+  }
+
+  void findCleanStepsForPhase(float phase) {
+    /* Search mutated steps for phase-step intersection */
+    for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
       simd::float_4 inMod = this->stepInsComputed[blockIdx];
       simd::float_4 outMod = this->stepOutsComputed[blockIdx];
-      this->hitsTemp[blockIdx] = (inMod <= phase) ^ (phase < outMod) ^ (inMod < outMod);
+      this->hitsClean[blockIdx] = (inMod <= phase) ^ (phase < outMod) ^ (inMod < outMod);
     }
   }
 
@@ -106,7 +119,7 @@ struct Pattern {
     this->lastActiveStepIdx = this->activeStepIdx;
     for (unsigned int blockOffset = 0; blockOffset < SIZE / BLOCK_SIZE; blockOffset++) {
       unsigned int blockIdx = SIZE / BLOCK_SIZE - blockOffset - 1;
-      int blockMask = simd::movemask(this->hitsTemp[blockIdx] & this->stepGates[blockIdx]);
+      int blockMask = simd::movemask(this->hits[blockIdx] & this->stepGates[blockIdx]);
       if (blockMask == 0) { continue; } // No hits in this block
       for (unsigned int stepInBlockOffset = 0; stepInBlockOffset < BLOCK_SIZE; stepInBlockOffset++) {
         unsigned int stepInBlockIdx = BLOCK_SIZE - stepInBlockOffset - 1;
@@ -186,6 +199,7 @@ struct Pattern {
         json_t *attrJ = json_array_get(attrsJ, attrIdx);
         this->stepBases[attrIdx][blockIdx][stepInBlockIdx] = json_number_value(json_object_get(attrJ, "base"));
         this->stepMutas[attrIdx][blockIdx][stepInBlockIdx] = json_number_value(json_object_get(attrJ, "mutation"));
+        this->applyMutations(attrIdx, blockIdx);
       }
     }
     for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
@@ -308,44 +322,54 @@ struct Pattern {
     }
   }
 
-  void mutateBlock(unsigned int blockIdx, unsigned int attrIdx, int mask, float factor, std::pair<float, float> bounds) {
-    // TODO: Clamp mutations
-    simd::float_4 factor_4 = factor;
+  void mutateBlock(unsigned int blockIdx, unsigned int attrIdx, simd::float_4 mask, float factorScalar) {
+    std::pair<float, float> bounds = this->attrBounds[attrIdx];
+    simd::float_4 factor = factorScalar;
+    simd::float_4 bases = this->stepBases[attrIdx][blockIdx];
+    simd::float_4 mutas = this->stepMutas[attrIdx][blockIdx];
+    simd::float_4 basesMutated = this->stepBasesMutated[attrIdx][blockIdx];
+    simd::float_4* vctrs = &this->stepMutaVectors[attrIdx][blockIdx];
+    simd::float_4 mults = this->attrMutaMultipliers[attrIdx];
+
     float rnds[blockSize];
     for (unsigned int i = 0; i < blockSize; i++) {
       rnds[i] = random::uniform();
     }
-    simd::float_4 rndOffset = (simd::float_4::load(rnds) - 0.5f) * 0.05f;
-    this->stepMutaVectors[attrIdx][blockIdx] = clamp(this->stepMutaVectors[attrIdx][blockIdx] + rndOffset, -1.f, 1.f);
-    simd::float_4 decreasedMutas = this->stepMutas[attrIdx][blockIdx] * 0.2f;
-    this->stepMutas[attrIdx][blockIdx] = simd::ifelse(
-      factor_4 < 0.f,
-      this->stepMutas[attrIdx][blockIdx] + this->stepMutas[attrIdx][blockIdx] * factor_4,
-      this->stepMutas[attrIdx][blockIdx] + this->stepMutaVectors[attrIdx][blockIdx] * factor_4 * this->attrMutaMultipliers[attrIdx]
+
+    simd::float_4 range = bounds.second - bounds.first;
+    simd::float_4 mutatedNormalized = (basesMutated - bounds.first) / range * 2.f - 1.f;
+    simd::float_4 overflowCaution = simd::trunc(mutatedNormalized * 2.f);
+    simd::float_4 antiOverflowFactor = 0.25f;
+
+    simd::float_4 rands = simd::float_4::load(rnds) * 2.f - 1.f;
+    simd::float_4 vectorLifeFactor = 0.25f;
+
+    *vctrs = simd::ifelse(
+      mask,
+      simd::clamp(*vctrs + (rands * vectorLifeFactor) - (overflowCaution * antiOverflowFactor), -1.f, 1.f),
+      *vctrs * 0.98f
     );
-    std::cout << blockIdx << " " << attrIdx << "  ";
-    for (unsigned int i = 0; i < blockSize; i++) {
-      float x = this->stepMutas[attrIdx][blockIdx][i];
-      std::cout << x << "  ";
-    }
-    for (unsigned int i = 0; i < blockSize; i++) {
-      float x = decreasedMutas[i];
-      std::cout << x << "  ";
-    }
-    std::cout << std::endl;
+
+    simd::float_4 newMutas = simd::ifelse(
+      factor < 0.f,
+      mutas + mutas * factor * 2.f,
+      mutas + *vctrs * factor * mults
+    );
+    newMutas = simd::clamp(newMutas, bounds.first - bases, bounds.second - bases);
+
+    this->stepMutas[attrIdx][blockIdx] = simd::ifelse(mask, newMutas, mutas);
     this->applyMutations(attrIdx, blockIdx);
-    // this->recalcInOuts(blockIdx);
+    this->recalcInOuts(blockIdx);
   }
 
   void mutate(float factor) {
-    // TODO: Implement this
     for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
-      std::pair<float, float> bounds = this->attrBounds[attrIdx];
       for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
-        this->mutateBlock(blockIdx, attrIdx, 0b1111, factor, bounds);
+        this->mutateBlock(blockIdx, attrIdx, createMask(0b1111), factor);
       }
     }
   }
+
   void scaleMutation(float factor) {
     // TODO: Implement this
     // for (int i = 0; i < NUM_STEPS; i++) {
@@ -398,9 +422,9 @@ struct Pattern {
   }
   void bakeMutation() {
     // TODO: Implement this
-		// for (int i = 0; i < NUM_STEPS; i++) {
+    // for (int i = 0; i < NUM_STEPS; i++) {
     //   this->steps[i].bakeMutation();
-		// }
+    // }
   }
 };
 
