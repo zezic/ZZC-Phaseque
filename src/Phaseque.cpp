@@ -376,7 +376,7 @@ void Phaseque::processIndicators() {
       );
     } else if (this->polyphonyMode == PolyphonyModes::UNISON) {
       lights[STEP_GATE_LIGHT + stepIdx].setBrightness(
-        simd::movemask(this->pattern.hits[blockIdx] & this->pattern.hitsClean[blockIdx]) & 1 << stepInBlockIdx ? 1.f : 0.f
+        simd::movemask(this->pattern.hits[blockIdx] | this->pattern.hitsClean[blockIdx]) & 1 << stepInBlockIdx ? 1.f : 0.f
       );
     }
 
@@ -433,7 +433,7 @@ simd::float_4 getBlockExpressions(
   simd::float_4 finalPhase = simd::ifelse(invertPower, 1.f - phase, phase);
   // Our target is between x^2 and x^8
   simd::float_4 finalPower = 5.f + simd::ifelse(invertPower, -exprPower, exprPower) * 3.f;
-  simd::float_4 powOutput = simd::pow(finalPhase, finalPower);
+  simd::float_4 powOutput = simd::ifelse(finalPhase > 0.f, simd::pow(finalPhase, finalPower), 0.f);
   simd::float_4 exprResult = simd::ifelse(invertPower, 1.f - powOutput, powOutput);
   simd::float_4 exprMix = simd::crossfade(phase, exprResult, simd::abs(exprCurve));
   simd::float_4 exprAmplitude = exprOut - exprIn;
@@ -453,7 +453,8 @@ void Phaseque::renderStepMono() {
   // Calculating the step phase
   simd::float_4 patternPhase = this->phaseShifted;
   simd::float_4 stepIns = this->pattern.stepMutaInsComputed[this->pattern.activeBlockIdx];
-  simd::float_4 stepPhases = (patternPhase - simd::ifelse(patternPhase < stepIns, stepIns - 1.f, stepIns)) / this->pattern.stepBasesMutated[StepAttr::STEP_LEN][this->pattern.activeBlockIdx];
+  simd::float_4 stepPhases = (patternPhase - simd::ifelse(patternPhase < stepIns, stepIns - 1.f, stepIns)) / simd::fmax(this->pattern.stepBasesMutated[StepAttr::STEP_LEN][this->pattern.activeBlockIdx], 0.01f);
+  stepPhases = clamp(stepPhases, 0.f, 1.f);
 
   float stepPhasesScalar[4];
   stepPhases.store(stepPhasesScalar);
@@ -475,16 +476,85 @@ void Phaseque::renderStepMono() {
   outputs[LEN_OUTPUT].setVoltage((len[stepInBlockIdx] / this->pattern.baseStepLen - 1.f) * 5.f);
   outputs[EXPR_OUTPUT].setVoltage(expressions[stepInBlockIdx] * 5.f);
   outputs[EXPR_CURVE_OUTPUT].setVoltage(curve[stepInBlockIdx] * 5.f);
-  outputs[PHASE_OUTPUT].setVoltage(stepPhases[stepInBlockIdx] * 10.f);
+  outputs[PHASE_OUTPUT].setVoltage(stepPhasesScalar[stepInBlockIdx] * 10.f);
+}
+
+void Phaseque::renderAttrs(
+  simd::float_4* ins,
+  simd::float_4 (*attrs)[STEP_ATTRS_TOTAL][2],
+  simd::float_4* hits,
+  int blockIdx,
+  int chanOffset
+) {
+  simd::float_4 patternPhase = this->phaseShifted;
+  simd::float_4 stepIns = *ins;
+  simd::float_4 stepPhases = (patternPhase - stepIns) / simd::fmax((*attrs)[StepAttr::STEP_LEN][blockIdx], 0.01f);
+  stepPhases = clamp(stepPhases, 0.f, 1.f);
+
+  simd::float_4 expressions = getBlockExpressions(
+    (*attrs)[StepAttr::STEP_EXPR_IN][blockIdx],
+    (*attrs)[StepAttr::STEP_EXPR_OUT][blockIdx],
+    (*attrs)[StepAttr::STEP_EXPR_POWER][blockIdx],
+    (*attrs)[StepAttr::STEP_EXPR_CURVE][blockIdx],
+    stepPhases
+  );
+
+  outputs[GATE_OUTPUT].setVoltageSimd(this->clutch ? simd::ifelse(*hits, 10.f, 0.f) : 0.f, chanOffset);
+  outputs[V_OUTPUT].setVoltageSimd((*attrs)[StepAttr::STEP_VALUE][blockIdx], chanOffset);
+  outputs[SHIFT_OUTPUT].setVoltageSimd((*attrs)[StepAttr::STEP_SHIFT][blockIdx] / this->pattern.baseStepLen * 5.f, chanOffset);
+  outputs[LEN_OUTPUT].setVoltageSimd((*attrs)[StepAttr::STEP_SHIFT][blockIdx] / this->pattern.baseStepLen - 1.f, chanOffset);
+  outputs[EXPR_OUTPUT].setVoltageSimd(expressions * 5.f, chanOffset);
+  outputs[EXPR_CURVE_OUTPUT].setVoltageSimd((*attrs)[StepAttr::STEP_EXPR_CURVE][blockIdx] * 5.f, chanOffset);
+  outputs[PHASE_OUTPUT].setVoltageSimd(stepPhases * 10.f, chanOffset);
 }
 
 void Phaseque::renderPolyphonic() {
   for (unsigned int blockIdx = 0; blockIdx < this->pattern.size / BLOCK_SIZE; blockIdx++) {
-    outputs[V_OUTPUT].setVoltageSimd(this->pattern.stepBasesMutated[StepAttr::STEP_VALUE][blockIdx], blockIdx);
+    int chanOffset = blockIdx * BLOCK_SIZE;
+    this->renderAttrs(
+      &this->pattern.stepMutaInsComputed[blockIdx],
+      &this->pattern.stepBasesMutated,
+      &this->pattern.hits[blockIdx],
+      blockIdx,
+      chanOffset
+    );
+
+    int gateMask = simd::movemask(this->pattern.hits[blockIdx]);
+    for (int stepInBlockIdx = 0; stepInBlockIdx < BLOCK_SIZE; stepInBlockIdx++) {
+      outputs[STEP_GATE_OUTPUT + chanOffset + stepInBlockIdx].setVoltage(gateMask & 1 << stepInBlockIdx ? 10.f : 0.f);
+    }
   }
 }
 
 void Phaseque::renderUnison() {
+  int gateMasks[2] = { 0, 0 };
+  for (unsigned int blockIdx = 0; blockIdx < this->pattern.size / BLOCK_SIZE; blockIdx++) {
+    int chanOffset = blockIdx * BLOCK_SIZE;
+    this->renderAttrs(
+      &this->pattern.stepMutaInsComputed[blockIdx],
+      &this->pattern.stepBasesMutated,
+      &this->pattern.hits[blockIdx],
+      blockIdx,
+      chanOffset
+    );
+    gateMasks[blockIdx] = gateMasks[blockIdx] | simd::movemask(this->pattern.hits[blockIdx]);
+  }
+  for (unsigned int blockIdx = 0; blockIdx < this->pattern.size / BLOCK_SIZE; blockIdx++) {
+    int chanOffset = 8 + blockIdx * BLOCK_SIZE;
+    this->renderAttrs(
+      &this->pattern.stepInsComputed[blockIdx],
+      &this->pattern.stepBases,
+      &this->pattern.hitsClean[blockIdx],
+      blockIdx,
+      chanOffset
+    );
+    gateMasks[blockIdx] = gateMasks[blockIdx] | simd::movemask(this->pattern.hitsClean[blockIdx]);
+  }
+  for (unsigned int blockIdx = 0; blockIdx < this->pattern.size / BLOCK_SIZE; blockIdx++) {
+    for (int stepInBlockIdx = 0; stepInBlockIdx < BLOCK_SIZE; stepInBlockIdx++) {
+      outputs[STEP_GATE_OUTPUT + blockIdx * BLOCK_SIZE + stepInBlockIdx].setVoltage(gateMasks[blockIdx] & 1 << stepInBlockIdx ? 10.f : 0.f);
+    }
+  }
 }
 
 bool Phaseque::processPhaseParam(float sampleTime) {
@@ -731,9 +801,9 @@ void Phaseque::process(const ProcessArgs &args) {
     this->pattern.findStepsForPhase(this->phaseShifted);
     this->renderPolyphonic();
   } else if (this->polyphonyMode == PolyphonyModes::UNISON) {
-    // TODO: Implement this
     this->pattern.findStepsForPhase(this->phaseShifted);
     this->pattern.findCleanStepsForPhase(this->phaseShifted);
+    this->renderUnison();
   }
 
   outputs[GATE_OUTPUT].setChannels(channels);

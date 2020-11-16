@@ -268,9 +268,14 @@ struct Pattern {
         unsigned int stepInBlockIdx = stepIdx % BLOCK_SIZE;
         float newValue = bounds.first + random::uniform() * range;
         this->stepBases[attrIdx][blockIdx][stepInBlockIdx] = newValue;
+        this->stepMutas[attrIdx][blockIdx][stepInBlockIdx] = 0.f;
+      }
+      for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+        this->applyMutations(attrIdx, blockIdx);
       }
     }
     for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+      this->recalcInOuts(blockIdx);
       int randomMask = 0;
       for (unsigned int stepInBlockIdx = 0; stepInBlockIdx < BLOCK_SIZE; stepInBlockIdx++) {
         // 10% chance for disabled steps

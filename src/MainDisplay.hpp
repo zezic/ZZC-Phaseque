@@ -119,8 +119,11 @@ struct MainDisplayWidget : BaseDisplayWidget {
 
     float len = workArea * ((mutated ? this->consumer->pattern.stepBasesMutated : this->consumer->pattern.stepBases)[StepAttr::STEP_LEN][blockIdx][stepInBlockIdx]);
     nvgBeginPath(args.vg);
-    for (unsigned int i = 0; i <= 100; i++) {
-      float phase = float(i) / 100.f;
+
+    unsigned int curveReso = 16;
+    for (unsigned int i = 0; i <= curveReso; i++) {
+      if (i % 2 != 0) { continue; }
+      float phase = float(i) / float(curveReso);
       float cx = x1 + len * phase;
       float expressions[4];
       getBlockExpressions(
@@ -131,11 +134,22 @@ struct MainDisplayWidget : BaseDisplayWidget {
           simd::float_4(phase)
       ).store(expressions);
       float cy = expressions[stepInBlockIdx];
-      if (phase == 0.0f) {
+      if (i == 0) {
         nvgMoveTo(args.vg, cx, exprHorizont + 6 + stepY * cy * -0.5);
         continue;
       }
-      nvgLineTo(args.vg, cx, exprHorizont + 6 + stepY * cy * -0.5);
+      float prevPhase = float(i - 1) / float(curveReso);
+      float prevCx = x1 + len * prevPhase;
+      float prevExpressions[4];
+      getBlockExpressions(
+          (mutated ? this->consumer->pattern.stepBasesMutated : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_IN][blockIdx],
+          (mutated ? this->consumer->pattern.stepBasesMutated : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_OUT][blockIdx],
+          (mutated ? this->consumer->pattern.stepBasesMutated : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_POWER][blockIdx],
+          (mutated ? this->consumer->pattern.stepBasesMutated : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_CURVE][blockIdx],
+          simd::float_4(prevPhase)
+      ).store(prevExpressions);
+      float prevCy = prevExpressions[stepInBlockIdx];
+      nvgQuadTo(args.vg, prevCx, exprHorizont + 6 + stepY * prevCy * -0.5, cx, exprHorizont + 6 + stepY * cy * -0.5);
     }
     nvgStroke(args.vg);
   }

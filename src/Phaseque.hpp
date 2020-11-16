@@ -276,6 +276,13 @@ struct Phaseque : Module {
   void processTransport(bool phaseWasZeroed, float sampleTime);
 
   void renderStepMono();
+  void renderAttrs(
+    simd::float_4* ins,
+    simd::float_4 (*attrs)[STEP_ATTRS_TOTAL][2],
+    simd::float_4* hits,
+    int blockIdx,
+    int chanOffset
+  );
   void renderPolyphonic();
   void renderUnison();
 
