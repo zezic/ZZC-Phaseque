@@ -102,7 +102,7 @@ struct Pattern {
     for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
       simd::float_4 inMod = this->stepMutaInsComputed[blockIdx];
       simd::float_4 outMod = this->stepMutaOutsComputed[blockIdx];
-      this->hits[blockIdx] = (inMod <= phase) ^ (phase < outMod) ^ (inMod < outMod);
+      this->hits[blockIdx] = ((inMod <= phase) ^ (phase < outMod) ^ (inMod < outMod)) & this->stepGates[blockIdx];
     }
   }
 
@@ -111,7 +111,7 @@ struct Pattern {
     for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
       simd::float_4 inMod = this->stepInsComputed[blockIdx];
       simd::float_4 outMod = this->stepOutsComputed[blockIdx];
-      this->hitsClean[blockIdx] = (inMod <= phase) ^ (phase < outMod) ^ (inMod < outMod);
+      this->hitsClean[blockIdx] = ((inMod <= phase) ^ (phase < outMod) ^ (inMod < outMod)) & this->stepGates[blockIdx];
     }
   }
 
@@ -138,7 +138,11 @@ struct Pattern {
   }
 
   void applyMutations(unsigned int attrIdx, unsigned int blockIdx) {
-    this->stepBasesMutated[attrIdx][blockIdx] = this->stepBases[attrIdx][blockIdx] + this->stepMutas[attrIdx][blockIdx];
+    std::pair<float, float> bounds = this->attrBounds[attrIdx];
+    this->stepBasesMutated[attrIdx][blockIdx] = simd::clamp(
+      this->stepBases[attrIdx][blockIdx] + this->stepMutas[attrIdx][blockIdx],
+      bounds.first, bounds.second
+    );
   }
 
   void recalcInOuts(unsigned int blockIdx) {
@@ -296,11 +300,13 @@ struct Pattern {
   }
 
   void quantize() {
-    // TODO: Implement this
-    // for (int i = 0; i < NUM_STEPS; i++) {
-    //   this->steps[i].quantize();
-    // }
-    // this->shift = 0.f;
+    for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+      this->stepBases[StepAttr::STEP_SHIFT][blockIdx] = simd::trunc(this->stepBases[StepAttr::STEP_SHIFT][blockIdx] * SIZE * 2) / SIZE * 2;
+      this->stepMutas[StepAttr::STEP_SHIFT][blockIdx] = simd::trunc(this->stepMutas[StepAttr::STEP_SHIFT][blockIdx] * SIZE * 2) / SIZE * 2;
+      this->applyMutations(StepAttr::STEP_SHIFT, blockIdx);
+      this->recalcInOuts(blockIdx);
+    }
+    this->shift = 0.f;
   }
 
   void shiftLeft() {
