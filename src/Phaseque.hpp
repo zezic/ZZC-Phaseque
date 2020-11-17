@@ -263,6 +263,10 @@ struct Phaseque : Module {
   std::shared_ptr<GridDisplayProducer> gridDisplayProducer;
   std::shared_ptr<MainDisplayConsumer> mainDisplayConsumer;
 
+  /* Settings */
+  bool useCompatibleBPMCV = true;
+  bool snapCV = false;
+
   void setPolyMode(PolyphonyModes polyMode);
   void goToPattern(unsigned int targetIdx);
   void goToFirstNonEmpty();
@@ -360,7 +364,7 @@ struct Phaseque : Module {
   Phaseque() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
     configParam(TEMPO_TRACK_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Sync inter-beat phase with clock");
-    configParam(BPM_PARAM, 0.0, 240.0, 120.0, "Inter-beat BPM override");
+    configParam(BPM_PARAM, 0.0, 240.0, 120.0, "Inter-beat BPM hint or internal BPM for V/OCT, V/BPS and standalone modes");
     configParam(PHASE_PARAM, 0.0, 1.0, 0.0, "Manual Phase Control");
     configParam(ABS_MODE_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Absolute Phase Input");
     configParam(CLUTCH_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Clutch Transport with Phase");
@@ -554,6 +558,8 @@ struct Phaseque : Module {
     json_object_set_new(rootJ, "patternIdx", json_integer(patternIdx + 1)); // +1 for compatibility with v1.1.2
     json_object_set_new(rootJ, "wait", json_boolean(wait));
     json_object_set_new(rootJ, "polyphonyMode", json_integer(polyphonyMode));
+    json_object_set_new(rootJ, "useCompatibleBPMCV", json_boolean(useCompatibleBPMCV));
+    json_object_set_new(rootJ, "snapCV", json_boolean(snapCV));
 
     json_t *patternsJ = json_array();
     json_array_append_new(patternsJ, json_null()); // Dummy for compatibility with v1.1.2
@@ -586,6 +592,9 @@ struct Phaseque : Module {
 
     json_t *waitJ = json_object_get(rootJ, "wait");
     json_t *polyphonyModeJ = json_object_get(rootJ, "polyphonyMode");
+    json_t *useCompatibleBPMCVJ = json_object_get(rootJ, "useCompatibleBPMCV");
+    json_t *snapCVJ = json_object_get(rootJ, "snapCV");
+
     if (tempoTrackJ) {
       this->tempoTrack = json_boolean_value(tempoTrackJ);
     }
@@ -613,6 +622,12 @@ struct Phaseque : Module {
     if (polyphonyModeJ) {
       this->polyphonyMode = json_integer_value(polyphonyModeJ);
     }
+    if (useCompatibleBPMCVJ) {
+      useCompatibleBPMCV = json_boolean_value(useCompatibleBPMCVJ);
+    } else {
+      useCompatibleBPMCV = false; // Fallback to pre v1.1.3 default behavior
+    }
+    if (snapCVJ) { snapCV = json_boolean_value(snapCVJ); }
 
     if (patternsJ) {
       size_t arraySize = json_array_size(patternsJ);

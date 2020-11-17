@@ -84,3 +84,53 @@ struct PolyModeItem : MenuItem {
     return menu;
   }
 };
+
+struct ExternalCVModeCompatibleOptionItem : MenuItem {
+  Phaseque *module;
+  void onAction(const event::Action &e) override {
+    module->useCompatibleBPMCV = true;
+  }
+};
+
+struct ExternalCVModeVBPSOptionItem : MenuItem {
+  Phaseque *module;
+  void onAction(const event::Action &e) override {
+    module->useCompatibleBPMCV = false;
+  }
+};
+
+struct SnapCVOptionItem : MenuItem {
+  Phaseque *module;
+  void onAction(const event::Action &e) override {
+    module->snapCV ^= true;
+  }
+};
+
+struct ExternalCVModeItem : MenuItem {
+  Phaseque *module;
+  Menu *createChildMenu() override {
+    Menu *menu = new Menu;
+
+    ExternalCVModeCompatibleOptionItem *item1 = new ExternalCVModeCompatibleOptionItem;
+    item1->text = "V/OCT";
+    item1->rightText = CHECKMARK(module->useCompatibleBPMCV);
+    item1->module = module;
+    menu->addChild(item1);
+
+    ExternalCVModeVBPSOptionItem *item2 = new ExternalCVModeVBPSOptionItem;
+    item2->text = "V/BPS";
+    item2->rightText = CHECKMARK(!module->useCompatibleBPMCV);
+    item2->module = module;
+    menu->addChild(item2);
+
+    menu->addChild(new MenuSeparator());
+
+    SnapCVOptionItem *item3 = new SnapCVOptionItem;
+    item3->text = "Snap CV";
+    item3->rightText = CHECKMARK(module->snapCV);
+    item3->module = module;
+    menu->addChild(item3);
+
+    return menu;
+  }
+};

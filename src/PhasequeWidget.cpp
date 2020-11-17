@@ -218,9 +218,18 @@ void PhasequeWidget::appendContextMenu(Menu *menu) {
   menu->addChild(new MenuSeparator());
   menu->addChild(phaseqClearPatternItem);
   menu->addChild(new MenuSeparator());
+
   PolyModeItem *polyModeItem = new PolyModeItem;
   polyModeItem->text = "Polyphony";
   polyModeItem->rightText = RIGHT_ARROW;
   polyModeItem->module = phaseq;
   menu->addChild(polyModeItem);
+
+  menu->addChild(new MenuSeparator());
+
+  ExternalCVModeItem *externalCVModeItem = new ExternalCVModeItem;
+  externalCVModeItem->text = "External CV Mode";
+  externalCVModeItem->rightText = RIGHT_ARROW;
+  externalCVModeItem->module = phaseq;
+  menu->addChild(externalCVModeItem);
 }

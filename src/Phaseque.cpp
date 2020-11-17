@@ -744,7 +744,17 @@ void Phaseque::processTransport(bool phaseWasZeroed, float sampleTime) {
     } else {
       tempoTracker.acc(sampleTime);
       if (inputs[VBPS_INPUT].isConnected()) {
-        bps = inputs[VBPS_INPUT].getVoltage();
+        if (this->useCompatibleBPMCV) {
+          double bpm = params[BPM_PARAM].getValue() * dsp::approxExp2_taylor5(inputs[VBPS_INPUT].getVoltage() + 10.f) / 1024.f;
+          bps = bpm / 60.0;
+        } else {
+          bps = inputs[VBPS_INPUT].getVoltage();
+        }
+        if (this->snapCV) {
+          bpm = bps * 60.0;
+          bpm = std::round(bpm);
+          bps = bpm / 60.0;
+        }
       } else if (tempoTrack) {
         if (tempoTracker.detected) {
           bps = tempoTracker.bps;
@@ -763,7 +773,25 @@ void Phaseque::processTransport(bool phaseWasZeroed, float sampleTime) {
     }
   } else if (inputs[VBPS_INPUT].isConnected()) {
     bpmDisabled = false;
-    bps = inputs[VBPS_INPUT].getVoltage();
+    if (this->useCompatibleBPMCV) {
+      double bpm = params[BPM_PARAM].getValue() * dsp::approxExp2_taylor5(inputs[VBPS_INPUT].getVoltage() + 10.f) / 1024.f;
+      bps = bpm / 60.0;
+    } else {
+      bps = inputs[VBPS_INPUT].getVoltage();
+    }
+    if (this->snapCV) {
+      bpm = bps * 60.0;
+      bpm = std::round(bpm);
+      bps = bpm / 60.0;
+    }
+    if (clutch) {
+      float nextPhase = fastmod(phase + bps * sampleTime / resolution, 1.0f);
+      phase = nextPhase;
+    }
+  } else {
+    bpmDisabled = false;
+    double bpm = params[BPM_PARAM].getValue();
+    bps = bpm / 60.0;
     if (clutch) {
       float nextPhase = fastmod(phase + bps * sampleTime / resolution, 1.0f);
       phase = nextPhase;
