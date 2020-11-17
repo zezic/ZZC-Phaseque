@@ -411,29 +411,35 @@ struct Phaseque : Module {
 
   void mutate(float factor) {
     this->pattern.mutate(factor);
+    if (factor < 0.f) {
+      this->showCustomSteps();
+    }
   }
   void mutateStep(unsigned int blockIdx, simd::float_4 mask, float factor) {
     this->pattern.mutateBlock(blockIdx, mask, factor);
+    if (factor < 0.f) {
+      this->showCustomSteps();
+    }
   }
   void resetMutation() {
     this->pattern.resetMutation();
+    this->showCustomSteps();
   }
   void resetStepsMutation(unsigned int blockIdx, simd::float_4 mask) {
     this->pattern.resetBlockMutation(blockIdx, mask);
+    this->showCustomSteps();
   }
   void bakeMutation() {
     this->pattern.bakeMutation();
   }
 
   void showCustomSteps() {
-    // TODO: implement this
-    // if (this->gridDisplayConsumer) {
-    //   this->gridDisplayConsumer->dirtyMask.set(this->patternIdx, this->pattern.hasCustomSteps());
-    // }
+    if (this->gridDisplayConsumer) {
+      this->gridDisplayConsumer->dirtyMask.set(this->patternIdx, this->pattern.hasCustomSteps());
+    }
   }
 
   void setStepAttrBase(int stepNumber, int attr, float target) {
-    // TODO: implement this
     unsigned int blockIdx = stepNumber / this->pattern.blockSize;
     unsigned int stepInBlockIdx = stepNumber % this->pattern.blockSize;
 
@@ -442,14 +448,7 @@ struct Phaseque : Module {
       this->pattern.recalcInOuts(blockIdx);
     }
     this->pattern.applyMutations(attr, blockIdx);
-    // this->pattern.steps[stepNumber].setAttrBase(attr, target);
-    // this->showCustomSteps();
-  }
-
-  void resetStepAttr(int stepNumber, int attr) {
-    // TODO: implement this
-    // this->pattern.steps[stepNumber].resetAttr(attr);
-    // this->showCustomSteps();
+    this->showCustomSteps();
   }
 
   void setPatternReso(float target) {
