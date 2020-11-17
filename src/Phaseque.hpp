@@ -35,6 +35,7 @@ struct StepAttrParamQuantityBase : ParamQuantity {
   int attr;
 };
 
+
 struct Phaseque : Module {
   enum ParamIds {
     PHASE_PARAM,
@@ -211,9 +212,13 @@ struct Phaseque : Module {
   dsp::SchmittTrigger revTrigger;
   dsp::SchmittTrigger flipTrigger;
 
-  NegSchmittTrigger mutRstTrigger[MAX_VOICES];
-  dsp::SchmittTrigger mutDecTrigger[MAX_VOICES];
-  dsp::SchmittTrigger mutIncTrigger[MAX_VOICES];
+  dsp::TSchmittTrigger<simd::float_4> mutRstTriggers[MAX_VOICES / BLOCK_SIZE];
+  dsp::TSchmittTrigger<simd::float_4> mutDecTriggers[MAX_VOICES / BLOCK_SIZE];
+  dsp::TSchmittTrigger<simd::float_4> mutIncTriggers[MAX_VOICES / BLOCK_SIZE];
+
+  dsp::SchmittTrigger mutRstTrigger;
+  dsp::SchmittTrigger mutDecTrigger;
+  dsp::SchmittTrigger mutIncTrigger;
 
   dsp::SchmittTrigger waitButtonTrigger;
   bool wait = false;
@@ -407,21 +412,14 @@ struct Phaseque : Module {
   void mutate(float factor) {
     this->pattern.mutate(factor);
   }
-  void mutateStep(int stepIdx, float factor) {
-    // TODO: implement this
-    // this->pattern.steps[stepIdx].mutate(factor);
-  }
-  void scaleMutation(float factor) {
-    // TODO: implement this
-    // this->pattern.scaleMutation(factor);
+  void mutateStep(unsigned int blockIdx, simd::float_4 mask, float factor) {
+    this->pattern.mutateBlock(blockIdx, mask, factor);
   }
   void resetMutation() {
-    // TODO: implement this
-    // this->pattern.resetMutation();
+    this->pattern.resetMutation();
   }
-  void resetStepMutation(int stepIdx) {
-    // TODO: implement this
-    // this->pattern.steps[stepIdx].resetMutation();
+  void resetStepsMutation(unsigned int blockIdx, simd::float_4 mask) {
+    this->pattern.resetBlockMutation(blockIdx, mask);
   }
   void bakeMutation() {
     // TODO: implement this
@@ -613,7 +611,7 @@ struct Phaseque : Module {
     json_t *patternsJ = json_object_get(rootJ, "patterns");
     if (patternsJ) {
       size_t arraySize = json_array_size(patternsJ);
-      int offset = arraySize - NUM_PATTERNS;
+      int offset = arraySize - NUM_PATTERNS; // For compatibility with v1.1.2 we will take 32 last arrays
       for (unsigned int i = offset; i < arraySize && (i - offset) < NUM_PATTERNS; i++) {
         json_t *patternJ = json_array_get(patternsJ, i);
         if (!json_is_null(patternJ)) {

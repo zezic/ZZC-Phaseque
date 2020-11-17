@@ -309,22 +309,48 @@ struct Pattern {
     this->shift = 0.f;
   }
 
+  private: void shiftBy(int delta) {
+    int targetShift = (SIZE + SIZE + delta) % SIZE;
+    for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
+      float bases[SIZE];
+      for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+        std::copy(this->stepBases[attrIdx][blockIdx].s, this->stepBases[attrIdx][blockIdx].s + BLOCK_SIZE, bases + blockIdx * BLOCK_SIZE);
+      }
+      std::rotate(&bases[0], &bases[targetShift], &bases[SIZE]);
+      for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+        std::copy(bases + blockIdx * BLOCK_SIZE, bases + (blockIdx + 1) * BLOCK_SIZE, this->stepBases[attrIdx][blockIdx].s);
+      }
+
+      float mutas[SIZE];
+      for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+        std::copy(this->stepMutas[attrIdx][blockIdx].s, this->stepMutas[attrIdx][blockIdx].s + BLOCK_SIZE, mutas + blockIdx * BLOCK_SIZE);
+      }
+      std::rotate(&mutas[0], &mutas[targetShift], &mutas[SIZE]);
+      for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+        std::copy(mutas + blockIdx * BLOCK_SIZE, mutas + (blockIdx + 1) * BLOCK_SIZE, this->stepMutas[attrIdx][blockIdx].s);
+        this->applyMutations(attrIdx, blockIdx);
+      }
+    }
+
+    float gates[SIZE];
+    for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+      std::copy(this->stepGates[blockIdx].s, this->stepGates[blockIdx].s + BLOCK_SIZE, gates + blockIdx * BLOCK_SIZE);
+    }
+    std::rotate(&gates[0], &gates[targetShift], &gates[SIZE]);
+    for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+      std::copy(gates + blockIdx * BLOCK_SIZE, gates + (blockIdx + 1) * BLOCK_SIZE, this->stepGates[blockIdx].s);
+      this->recalcInOuts(blockIdx);
+    }
+  }
+
+  public:
+
   void shiftLeft() {
-    // TODO: Implement this
-    // std::rotate(&this->steps[0], &this->steps[1], &this->steps[NUM_STEPS]);
-    // for (int i = 0; i < NUM_STEPS; i++) {
-    //   this->steps[i].in_ = fastmod(this->steps[i].in_ - baseStepLen, 1.0f);
-    //   this->steps[i].idx = eucMod(this->steps[i].idx - 1, NUM_STEPS);
-    // }
+    this->shiftBy(1);
   }
 
   void shiftRight() {
-    // TODO: Implement this
-    // std::rotate(&this->steps[0], &this->steps[NUM_STEPS - 1], &this->steps[NUM_STEPS]);
-    // for (int i = 0; i < NUM_STEPS; i++) {
-    //   this->steps[i].in_ = fastmod(this->steps[i].in_ + baseStepLen, 1.0f);
-    //   this->steps[i].idx = eucMod(this->steps[i].idx + 1, NUM_STEPS);
-    // }
+    this->shiftBy(-1);
   }
 
   void resetLenghts() {
@@ -333,66 +359,68 @@ struct Pattern {
     }
   }
 
-  void mutateBlock(unsigned int blockIdx, unsigned int attrIdx, simd::float_4 mask, float factorScalar) {
-    std::pair<float, float> bounds = this->attrBounds[attrIdx];
-    simd::float_4 factor = factorScalar;
-    simd::float_4 bases = this->stepBases[attrIdx][blockIdx];
-    simd::float_4 mutas = this->stepMutas[attrIdx][blockIdx];
-    simd::float_4 basesMutated = this->stepBasesMutated[attrIdx][blockIdx];
-    simd::float_4* vctrs = &this->stepMutaVectors[attrIdx][blockIdx];
-    simd::float_4 mults = this->attrMutaMultipliers[attrIdx];
+  void mutateBlock(unsigned int blockIdx, simd::float_4 mask, float factorScalar) {
+    for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
+      std::pair<float, float> bounds = this->attrBounds[attrIdx];
+      simd::float_4 factor = factorScalar;
+      simd::float_4 bases = this->stepBases[attrIdx][blockIdx];
+      simd::float_4 mutas = this->stepMutas[attrIdx][blockIdx];
+      simd::float_4 basesMutated = this->stepBasesMutated[attrIdx][blockIdx];
+      simd::float_4* vctrs = &this->stepMutaVectors[attrIdx][blockIdx];
+      simd::float_4 mults = this->attrMutaMultipliers[attrIdx];
 
-    float rnds[blockSize];
-    for (unsigned int i = 0; i < blockSize; i++) {
-      rnds[i] = random::uniform();
+      float rnds[blockSize];
+      for (unsigned int i = 0; i < blockSize; i++) {
+        rnds[i] = random::uniform();
+      }
+
+      simd::float_4 range = bounds.second - bounds.first;
+      simd::float_4 mutatedNormalized = (basesMutated - bounds.first) / range * 2.f - 1.f;
+      simd::float_4 overflowCaution = simd::trunc(mutatedNormalized * 2.f);
+      simd::float_4 antiOverflowFactor = 0.25f;
+
+      simd::float_4 rands = simd::float_4::load(rnds) * 2.f - 1.f;
+      simd::float_4 vectorLifeFactor = 0.25f;
+
+      *vctrs = simd::ifelse(
+        mask,
+        simd::clamp(*vctrs + (rands * vectorLifeFactor) - (overflowCaution * antiOverflowFactor), -1.f, 1.f),
+        *vctrs * 0.98f
+      );
+
+      simd::float_4 newMutas = simd::ifelse(
+        factor < 0.f,
+        mutas + mutas * factor * 2.f,
+        mutas + *vctrs * factor * mults
+      );
+      newMutas = simd::clamp(newMutas, bounds.first - bases, bounds.second - bases);
+
+      this->stepMutas[attrIdx][blockIdx] = simd::ifelse(mask, newMutas, mutas);
+      this->applyMutations(attrIdx, blockIdx);
+      this->recalcInOuts(blockIdx);
     }
-
-    simd::float_4 range = bounds.second - bounds.first;
-    simd::float_4 mutatedNormalized = (basesMutated - bounds.first) / range * 2.f - 1.f;
-    simd::float_4 overflowCaution = simd::trunc(mutatedNormalized * 2.f);
-    simd::float_4 antiOverflowFactor = 0.25f;
-
-    simd::float_4 rands = simd::float_4::load(rnds) * 2.f - 1.f;
-    simd::float_4 vectorLifeFactor = 0.25f;
-
-    *vctrs = simd::ifelse(
-      mask,
-      simd::clamp(*vctrs + (rands * vectorLifeFactor) - (overflowCaution * antiOverflowFactor), -1.f, 1.f),
-      *vctrs * 0.98f
-    );
-
-    simd::float_4 newMutas = simd::ifelse(
-      factor < 0.f,
-      mutas + mutas * factor * 2.f,
-      mutas + *vctrs * factor * mults
-    );
-    newMutas = simd::clamp(newMutas, bounds.first - bases, bounds.second - bases);
-
-    this->stepMutas[attrIdx][blockIdx] = simd::ifelse(mask, newMutas, mutas);
-    this->applyMutations(attrIdx, blockIdx);
-    this->recalcInOuts(blockIdx);
   }
 
   void mutate(float factor) {
-    for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
-      for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
-        this->mutateBlock(blockIdx, attrIdx, createMask(0b1111), factor);
-      }
+    for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+      this->mutateBlock(blockIdx, createMask(0b1111), factor);
     }
   }
 
-  void scaleMutation(float factor) {
-    // TODO: Implement this
-    // for (int i = 0; i < NUM_STEPS; i++) {
-    //   this->steps[i].scaleMutation(factor);
-    // }
+  void resetBlockMutation(unsigned int blockIdx, simd::float_4 mask) {
+    for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
+      this->stepMutas[attrIdx][blockIdx] = simd::ifelse(mask, 0.f, this->stepMutas[attrIdx][blockIdx]);
+      this->applyMutations(attrIdx, blockIdx);
+    }
+    this->recalcInOuts(blockIdx);
   }
+
   void resetMutation() {
-    // TODO: Implement this
-    // for (int i = 0; i < NUM_STEPS; i++) {
-    //   this->steps[i].resetMutation();
-    // }
+    for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+      this->resetBlockMutation(blockIdx, createMask(0b1111));
+    }
   }
+
   void reverse() {
     // TODO: Implement this
     // Step reversed[NUM_STEPS];

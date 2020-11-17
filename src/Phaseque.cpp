@@ -257,18 +257,24 @@ void Phaseque::processMutaInputs() {
   if (inputs[MUTA_DEC_INPUT].isConnected()) {
     int mutaDecChannels = inputs[MUTA_DEC_INPUT].getChannels();
     if (mutaDecChannels > 1) {
-      for (int i = 0; i < mutaDecChannels; i++) {
-        int targetStepIdx = i % NUM_STEPS;
-        if (mutRstTrigger[i].process(inputs[MUTA_DEC_INPUT].getVoltage(i))) {
-          this->resetStepMutation(targetStepIdx);
-        } else if (mutDecTrigger[i].process(inputs[MUTA_DEC_INPUT].getVoltage(i))) {
-          this->mutateStep(targetStepIdx, -0.05f);
+      for (unsigned int blockIdx = 0; blockIdx < this->pattern.size / BLOCK_SIZE; blockIdx++) {
+        simd::float_4 voltage = inputs[MUTA_DEC_INPUT].getNormalVoltageSimd<simd::float_4>(0.f, blockIdx * BLOCK_SIZE);
+        simd::float_4 resetMask = mutDecTriggers[blockIdx].process(-voltage);
+        int resetMaskInt = simd::movemask(resetMask);
+        if (resetMaskInt) {
+          this->resetStepsMutation(blockIdx, resetMask);
+        }
+        simd::float_4 mutateMask = mutRstTriggers[blockIdx].process(voltage);
+        int mutateMaskInt = simd::movemask(mutateMask);
+        if (mutateMaskInt) {
+          this->mutateStep(blockIdx, mutateMask, -0.05f);
         }
       }
     } else {
-      if (mutRstTrigger[0].process(inputs[MUTA_DEC_INPUT].getVoltage())) {
+      float voltage = inputs[MUTA_DEC_INPUT].getVoltage();
+      if (mutRstTrigger.process(-voltage)) {
         this->resetMutation();
-      } else if (mutDecTrigger[0].process(inputs[MUTA_DEC_INPUT].getVoltage())) {
+      } else if (mutDecTrigger.process(voltage)) {
         this->mutate(-0.05f);
       }
     }
@@ -276,14 +282,16 @@ void Phaseque::processMutaInputs() {
   if (inputs[MUTA_INC_INPUT].isConnected()) {
     int mutaIncChannels = inputs[MUTA_INC_INPUT].getChannels();
     if (mutaIncChannels > 1) {
-      for (int i = 0; i < mutaIncChannels; i++) {
-        if (mutIncTrigger[i].process(inputs[MUTA_INC_INPUT].getVoltage(i))) {
-          int targetStepIdx = i % NUM_STEPS;
-          this->mutateStep(targetStepIdx, 0.1f);
+      for (unsigned int blockIdx = 0; blockIdx < this->pattern.size / BLOCK_SIZE; blockIdx++) {
+        simd::float_4 voltage = inputs[MUTA_INC_INPUT].getNormalVoltageSimd<simd::float_4>(0.f, blockIdx * BLOCK_SIZE);
+        simd::float_4 mutateMask = mutIncTriggers[blockIdx].process(voltage);
+        int mutateMaskInt = simd::movemask(mutateMask);
+        if (mutateMaskInt) {
+          this->mutateStep(blockIdx, mutateMask, 0.1f);
         }
       }
     } else {
-      if (mutIncTrigger[0].process(inputs[MUTA_INC_INPUT].getVoltage())) {
+      if (mutIncTrigger.process(inputs[MUTA_INC_INPUT].getVoltage())) {
         this->mutate(0.1f);
       }
     }
