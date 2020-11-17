@@ -363,6 +363,8 @@ struct Pattern {
   void resetLenghts() {
     for (unsigned int blockIdx = 0; blockIdx  < SIZE / BLOCK_SIZE; blockIdx++) {
       this->stepBases[StepAttr::STEP_LEN][blockIdx] = this->stepAttrDefaults[StepAttr::STEP_LEN];
+      this->applyMutations(StepAttr::STEP_LEN, blockIdx);
+      this->recalcInOuts(blockIdx);
     }
   }
 
@@ -429,42 +431,48 @@ struct Pattern {
   }
 
   void reverse() {
-    // TODO: Implement this
-    // Step reversed[NUM_STEPS];
-    // for (int i = 0; i < NUM_STEPS; i++) {
-    //   Step orig = this->steps[NUM_STEPS - i - 1];
-    //   reversed[i] = orig;
-    //   reversed[i].idx = i;
-    //   reversed[i].updateIn();
-    //   float newShiftBase = baseStepLen - orig.attrs[STEP_LEN].base - orig.attrs[STEP_SHIFT].base;
-    //   float newShiftMut = -orig.attrs[STEP_LEN].mutation - orig.attrs[STEP_SHIFT].mutation;
-    //   reversed[i].attrs[STEP_SHIFT].setBase(newShiftBase);
-    //   reversed[i].attrs[STEP_SHIFT].setMutation(newShiftMut);
-    //   reversed[i].attrs[STEP_SHIFT].applyMutation();
-    //   reversed[i].attrs[STEP_EXPR_IN] = orig.attrs[STEP_EXPR_OUT];
-    //   reversed[i].attrs[STEP_EXPR_OUT] = orig.attrs[STEP_EXPR_IN];
-    //   reversed[i].attrs[STEP_EXPR_POWER].setBase(reversed[i].attrs[STEP_EXPR_POWER].base * -1.0f);
-    //   reversed[i].attrs[STEP_EXPR_POWER].setMutation(reversed[i].attrs[STEP_EXPR_POWER].mutation * -1.0f);
-    //   reversed[i].attrs[STEP_EXPR_POWER].applyMutation();
-    // }
-    // for (int i = 0; i < NUM_STEPS; i++) {
-    //   this->steps[i] = reversed[i];
-    // }
+    this->shift = -this->shift;
+    for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
+      float newBases[SIZE];
+      for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+        std::copy(this->stepBases[attrIdx][blockIdx].s, this->stepBases[attrIdx][blockIdx].s + BLOCK_SIZE, newBases + blockIdx * BLOCK_SIZE);
+      }
+      std::reverse(newBases, newBases + SIZE);
+      for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+        std::copy(newBases + blockIdx * BLOCK_SIZE, newBases + (blockIdx + 1) * BLOCK_SIZE, this->stepBases[attrIdx][blockIdx].s);
+      }
+
+      float newMutas[SIZE];
+      for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+        std::copy(this->stepMutas[attrIdx][blockIdx].s, this->stepMutas[attrIdx][blockIdx].s + BLOCK_SIZE, newMutas + blockIdx * BLOCK_SIZE);
+      }
+      std::reverse(newMutas, newMutas + SIZE);
+      for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+        std::copy(newMutas + blockIdx * BLOCK_SIZE, newMutas + (blockIdx + 1) * BLOCK_SIZE, this->stepMutas[attrIdx][blockIdx].s);
+      }
+    }
+    for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+      std::swap(this->stepBases[StepAttr::STEP_EXPR_IN][blockIdx], this->stepBases[StepAttr::STEP_EXPR_OUT][blockIdx]);
+      this->stepBases[StepAttr::STEP_SHIFT][blockIdx] =  this->baseStepLen - this->stepBases[StepAttr::STEP_SHIFT][blockIdx] - this->stepBases[StepAttr::STEP_LEN][blockIdx];
+      this->stepMutas[StepAttr::STEP_SHIFT][blockIdx] =  -this->stepMutas[StepAttr::STEP_SHIFT][blockIdx];
+      this->stepBases[StepAttr::STEP_EXPR_POWER][blockIdx] =  -this->stepBases[StepAttr::STEP_EXPR_POWER][blockIdx];
+      this->stepMutas[StepAttr::STEP_EXPR_POWER][blockIdx] =  -this->stepMutas[StepAttr::STEP_EXPR_POWER][blockIdx];
+    }
+    for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
+      for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+        this->applyMutations(attrIdx, blockIdx);
+      }
+    }
+    for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+      this->recalcInOuts(blockIdx);
+    }
   }
   void flip() {
-    // TODO: Implement this
-    // float low = 2.0f;
-    // float high = -2.0f;
-    // for (int i = 0; i < NUM_STEPS; i++) {
-    //   low = fminf(low, this->steps[i].attrs[STEP_VALUE].base);
-    //   high = fmaxf(high, this->steps[i].attrs[STEP_VALUE].base);
-    // }
-    // float range = high - low;
-    // for (int i = 0; i < NUM_STEPS; i++) {
-    //   this->steps[i].attrs[STEP_VALUE].setBase(range - (this->steps[i].attrs[STEP_VALUE].base - low) + low);
-    //   this->steps[i].attrs[STEP_VALUE].setMutation(this->steps[i].attrs[STEP_VALUE].mutation * -1.0f);
-    //   this->steps[i].attrs[STEP_VALUE].applyMutation();
-    // }
+    for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+      this->stepBases[StepAttr::STEP_VALUE][blockIdx] = -this->stepBases[StepAttr::STEP_VALUE][blockIdx];
+      this->stepMutas[StepAttr::STEP_VALUE][blockIdx] = -this->stepMutas[StepAttr::STEP_VALUE][blockIdx];
+      this->applyMutations(StepAttr::STEP_VALUE, blockIdx);
+    }
   }
   void bakeMutation() {
     // TODO: Implement this
