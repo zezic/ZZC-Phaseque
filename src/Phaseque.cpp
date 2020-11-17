@@ -354,7 +354,6 @@ void Phaseque::processPatternButtons() {
 }
 
 void Phaseque::processJumpInputs() {
-  // TODO: Implement this
   this->jump = false;
   if (absMode || samplesSinceLastReset < 20) {
     return;
@@ -366,19 +365,21 @@ void Phaseque::processJumpInputs() {
       return;
     }
   }
-  // if (inputs[RND_JUMP_INPUT].isConnected() && rndJumpInputTrigger.process(inputs[RND_JUMP_INPUT].getVoltage())) {
-    // int nonMuted[NUM_STEPS];
-    // int idx = 0;
-    // for (int i = 0; i < NUM_STEPS; i++) {
-      // if (!pattern.steps[i].gate ^ !globalGate) { continue; }
-      // nonMuted[idx] = i;
-      // idx++;
-    // }
-    // if (idx > 0) {
-      // jumpToStep(pattern.steps[nonMuted[(int) (random::uniform() * idx)]]);
-      // retrigGapGenerator.trigger(1e-4f);
-    // }
-  // }
+  if (inputs[RND_JUMP_INPUT].isConnected() && rndJumpInputTrigger.process(inputs[RND_JUMP_INPUT].getVoltage())) {
+    std::vector<unsigned int> nonMuted;
+    for (unsigned int i = 0; i < NUM_STEPS; i++) {
+      unsigned int blockIdx = i / 4;
+      unsigned int stepInBlockIdx = i % 4;
+      int gateMask = simd::movemask(this->pattern.stepGates[blockIdx]);
+      if ((gateMask & (1 << stepInBlockIdx)) ^ !globalGate) {
+        nonMuted.push_back(i);
+      }
+    }
+    if (nonMuted.size() > 0) {
+      jumpToStep(nonMuted.at(random::uniform() * nonMuted.size()));
+      retrigGapGenerator.trigger(1e-4f);
+    }
+  }
 }
 
 void Phaseque::processIndicators() {
