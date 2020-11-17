@@ -196,6 +196,8 @@ struct Phaseque : Module {
   bool globalGateInternal = true;
   float globalShift = 0.0f;
   float globalLen = 1.0f;
+  float globalPower = 0.f;
+  float globalCurve = 0.f;
 
   dsp::SchmittTrigger gateButtonsTriggers[NUM_STEPS];
   dsp::SchmittTrigger jumpInputsTriggers[NUM_STEPS];

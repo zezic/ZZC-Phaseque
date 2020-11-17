@@ -73,6 +73,16 @@ void Phaseque::processGlobalParams() {
     this->globalLen = newGlobalLen;
     this->pattern.applyGlobalLen(this->globalLen);
   }
+
+  // Curve
+  if (inputs[GLOBAL_EXPR_CURVE_INPUT].isConnected()) {
+    this->globalCurve = inputs[GLOBAL_EXPR_CURVE_INPUT].getVoltage();
+  }
+
+  // Power
+  if (inputs[GLOBAL_EXPR_POWER_INPUT].isConnected()) {
+    this->globalPower = inputs[GLOBAL_EXPR_POWER_INPUT].getVoltage();
+  }
 }
 
 void Phaseque::processPatternNav() {
@@ -462,8 +472,16 @@ simd::float_4 getBlockExpressions(
   simd::float_4 exprOut,
   simd::float_4 exprPower,
   simd::float_4 exprCurve,
-  simd::float_4 phase
+  simd::float_4 phase,
+  float globalPower,
+  float globalCurve
 ) {
+  if (globalPower != 0.f) {
+    exprPower = simd::clamp(exprPower + globalPower * 0.2f, -1.f, 1.f);
+  }
+  if (globalCurve != 0.f) {
+    exprCurve = simd::clamp(exprCurve + globalCurve * 0.2f, -1.f, 1.f);
+  }
   simd::float_4 isRising = exprOut > exprIn;
   simd::float_4 curveBendedUp = exprCurve > 0.f;
   simd::float_4 invertPower = ~(isRising ^ curveBendedUp);
@@ -506,7 +524,9 @@ void Phaseque::renderStepMono() {
     this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_OUT][this->pattern.activeBlockIdx],
     this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_POWER][this->pattern.activeBlockIdx],
     this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_CURVE][this->pattern.activeBlockIdx],
-    stepPhases
+    stepPhases,
+    this->globalPower,
+    this->globalCurve
   ).store(expressions);
 
   outputs[V_OUTPUT].setVoltage(v[stepInBlockIdx]);
@@ -534,7 +554,9 @@ void Phaseque::renderAttrs(
     (*attrs)[StepAttr::STEP_EXPR_OUT][blockIdx],
     (*attrs)[StepAttr::STEP_EXPR_POWER][blockIdx],
     (*attrs)[StepAttr::STEP_EXPR_CURVE][blockIdx],
-    stepPhases
+    stepPhases,
+    this->globalPower,
+    this->globalCurve
   );
 
   outputs[GATE_OUTPUT].setVoltageSimd(this->clutch ? simd::ifelse(*hits, 10.f, 0.f) : 0.f, chanOffset);
@@ -765,8 +787,8 @@ void Phaseque::feedDisplays() {
     this->mainDisplayConsumer->pattern = this->pattern;
     this->mainDisplayConsumer->globalGate = this->globalGate;
     this->mainDisplayConsumer->polyphonyMode = this->polyphonyMode;
-    this->mainDisplayConsumer->exprCurveCV = inputs[GLOBAL_EXPR_CURVE_INPUT].getVoltage();
-    this->mainDisplayConsumer->exprPowerCV = inputs[GLOBAL_EXPR_POWER_INPUT].getVoltage();
+    this->mainDisplayConsumer->globalCurve = this->globalCurve;
+    this->mainDisplayConsumer->globalPower = this->globalPower;
     this->mainDisplayConsumer->consumed = false;
   }
 }

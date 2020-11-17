@@ -23,7 +23,9 @@ simd::float_4 getBlockExpressions(
   simd::float_4 exprOut,
   simd::float_4 exprPower,
   simd::float_4 exprCurve,
-  simd::float_4 phase
+  simd::float_4 phase,
+  float globalPower,
+  float globalCurve
 );
 
 #define BLOCK_SIZE 4

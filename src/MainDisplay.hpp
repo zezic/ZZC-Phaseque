@@ -12,8 +12,8 @@ struct MainDisplayConsumer {
   Pattern<8> pattern;
   bool globalGate = false;
   int polyphonyMode = PolyphonyModes::MONOPHONIC;
-  float exprCurveCV = 0.f;
-  float exprPowerCV = 0.f;
+  float globalPower = 0.f;
+  float globalCurve = 0.f;
 
   bool consumed = false;
 
@@ -131,7 +131,9 @@ struct MainDisplayWidget : BaseDisplayWidget {
           (mutated ? this->consumer->pattern.stepBasesMutated : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_OUT][blockIdx],
           (mutated ? this->consumer->pattern.stepBasesMutated : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_POWER][blockIdx],
           (mutated ? this->consumer->pattern.stepBasesMutated : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_CURVE][blockIdx],
-          simd::float_4(phase)
+          simd::float_4(phase),
+          this->consumer->globalPower,
+          this->consumer->globalCurve
       ).store(expressions);
       float cy = expressions[stepInBlockIdx];
       if (i == 0) {
@@ -146,7 +148,9 @@ struct MainDisplayWidget : BaseDisplayWidget {
           (mutated ? this->consumer->pattern.stepBasesMutated : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_OUT][blockIdx],
           (mutated ? this->consumer->pattern.stepBasesMutated : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_POWER][blockIdx],
           (mutated ? this->consumer->pattern.stepBasesMutated : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_CURVE][blockIdx],
-          simd::float_4(prevPhase)
+          simd::float_4(prevPhase),
+          this->consumer->globalPower,
+          this->consumer->globalCurve
       ).store(prevExpressions);
       float prevCy = prevExpressions[stepInBlockIdx];
       nvgQuadTo(args.vg, prevCx, exprHorizont + 6 + stepY * prevCy * -0.5, cx, exprHorizont + 6 + stepY * cy * -0.5);
