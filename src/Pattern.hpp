@@ -407,8 +407,8 @@ struct Pattern {
       simd::float_4* vctrs = &this->stepMutaVectors[attrIdx][blockIdx];
       simd::float_4 mults = this->attrMutaMultipliers[attrIdx];
 
-      float rnds[blockSize] = { 0.f };
-      for (unsigned int i = 0; i < blockSize; i++) {
+      float rnds[BLOCK_SIZE] = { 0.f };
+      for (unsigned int i = 0; i < BLOCK_SIZE; i++) {
         rnds[i] = random::uniform();
       }
 
