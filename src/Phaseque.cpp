@@ -267,6 +267,8 @@ void Phaseque::processButtons() {
   if (globalGateButtonTrigger.process(params[GLOBAL_GATE_SWITCH_PARAM].getValue())) {
     this->globalGateInternal ^= true;
   }
+
+  this->useCompatibleBPMCV = params[USE_COMPATIBLE_BPM_CV_PARAM].getValue() == 1.f;
 }
 
 void Phaseque::processClutchAndReset() {

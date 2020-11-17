@@ -68,6 +68,7 @@ struct Phaseque : Module {
     ENUMS(STEP_EXPR_CURVE_PARAM, NUM_STEPS),
     ENUMS(STEP_EXPR_POWER_PARAM, NUM_STEPS),
     ENUMS(STEP_EXPR_OUT_PARAM, NUM_STEPS),
+    USE_COMPATIBLE_BPM_CV_PARAM,
     NUM_PARAMS
   };
   enum InputIds {
@@ -363,8 +364,9 @@ struct Phaseque : Module {
 
   Phaseque() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
+    configParam(USE_COMPATIBLE_BPM_CV_PARAM, 0.0f, 1.0f, 1.0f, "External CV Mode");
     configParam(TEMPO_TRACK_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Sync inter-beat phase with clock");
-    configParam(BPM_PARAM, 0.0, 240.0, 120.0, "Inter-beat BPM hint or internal BPM for V/OCT, V/BPS and standalone modes");
+    configParam(BPM_PARAM, 0.0, 240.0, 120.0, "Clock's BPM hint or internal tempo to use with V/OCT, V/BPS and standalone modes");
     configParam(PHASE_PARAM, 0.0, 1.0, 0.0, "Manual Phase Control");
     configParam(ABS_MODE_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Absolute Phase Input");
     configParam(CLUTCH_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Clutch Transport with Phase");

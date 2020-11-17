@@ -89,6 +89,7 @@ struct ExternalCVModeCompatibleOptionItem : MenuItem {
   Phaseque *module;
   void onAction(const event::Action &e) override {
     module->useCompatibleBPMCV = true;
+    module->params[Phaseque::USE_COMPATIBLE_BPM_CV_PARAM].setValue(1.f);
   }
 };
 
@@ -96,6 +97,7 @@ struct ExternalCVModeVBPSOptionItem : MenuItem {
   Phaseque *module;
   void onAction(const event::Action &e) override {
     module->useCompatibleBPMCV = false;
+    module->params[Phaseque::USE_COMPATIBLE_BPM_CV_PARAM].setValue(0.f);
   }
 };
 

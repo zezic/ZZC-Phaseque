@@ -5,6 +5,8 @@ PhasequeWidget::PhasequeWidget(Phaseque *module) {
   setModule(module);
   setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/panels/Phaseque.svg")));
 
+  addParam(createParam<ZZC_VBPSVOCTSwitch>(Vec(49.f, 37.f), module, Phaseque::USE_COMPATIBLE_BPM_CV_PARAM));
+
   addInput(createInput<ZZC_PJ_Port>(Vec(14, 50), module, Phaseque::CLOCK_INPUT));
   addChild(createLight<TinyLight<GreenLight>>(Vec(36, 50), module, Phaseque::CLOCK_LED));
   addParam(createParam<ZZC_LEDBezelDark>(Vec(15.3f, 82.3f), module, Phaseque::TEMPO_TRACK_SWITCH_PARAM));
