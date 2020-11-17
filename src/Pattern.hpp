@@ -196,9 +196,10 @@ struct Pattern {
     return patternJ;
   }
 
-  void dataFromJson(json_t *patternJ) {
+  void dataFromJson(json_t *patternJ, bool compatibilityMode) {
     this->resolution = json_number_value(json_object_get(patternJ, "resolution"));
-    this->goTo = json_number_value(json_object_get(patternJ, "goTo")) - 1; // -1 for compatibility with v1.1.2
+    this->goTo = json_number_value(json_object_get(patternJ, "goTo"));
+    if (compatibilityMode) { this->goTo -= 1; } // -1 for compatibility with v1.1.2
     this->shift = json_number_value(json_object_get(patternJ, "shift"));
     json_t *stepsJ = json_object_get(patternJ, "steps");
     for (unsigned int stepIdx = 0; stepIdx < SIZE; stepIdx++) {

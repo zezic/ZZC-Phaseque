@@ -574,7 +574,16 @@ struct Phaseque : Module {
     json_t *absModeJ = json_object_get(rootJ, "absMode");
     json_t *clutchJ = json_object_get(rootJ, "clutch");
     json_t *globalGateInternalJ = json_object_get(rootJ, "globalGateInternal");
-    json_t *patternIdxJ = json_object_get(rootJ, "patternIdx") - 1; // -1 for compatibility with v1.1.2
+
+    json_t *patternsJ = json_object_get(rootJ, "patterns");
+    bool compatibilityMode = false; // Be compatible with v1.1.2
+    if (patternsJ) {
+      size_t arraySize = json_array_size(patternsJ);
+      compatibilityMode = arraySize == 33;
+    }
+
+    json_t *patternIdxJ = json_object_get(rootJ, "patternIdx");
+
     json_t *waitJ = json_object_get(rootJ, "wait");
     json_t *polyphonyModeJ = json_object_get(rootJ, "polyphonyMode");
     if (tempoTrackJ) {
@@ -594,6 +603,9 @@ struct Phaseque : Module {
     }
     if (json_integer_value(patternIdxJ) != 0) {
       this->patternIdx = json_integer_value(patternIdxJ);
+      if (compatibilityMode) {
+        this->patternIdx -= 1;
+      }
     }
     if (waitJ) {
       this->wait = json_boolean_value(waitJ);
@@ -602,14 +614,13 @@ struct Phaseque : Module {
       this->polyphonyMode = json_integer_value(polyphonyModeJ);
     }
 
-    json_t *patternsJ = json_object_get(rootJ, "patterns");
     if (patternsJ) {
       size_t arraySize = json_array_size(patternsJ);
       int offset = arraySize - NUM_PATTERNS; // For compatibility with v1.1.2 we will take 32 last arrays
       for (unsigned int i = offset; i < arraySize && (i - offset) < NUM_PATTERNS; i++) {
         json_t *patternJ = json_array_get(patternsJ, i);
         if (!json_is_null(patternJ)) {
-          this->patterns[i - offset].dataFromJson(patternJ);
+          this->patterns[i - offset].dataFromJson(patternJ, compatibilityMode);
         }
       }
     }
