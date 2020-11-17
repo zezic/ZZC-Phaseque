@@ -497,10 +497,16 @@ struct Pattern {
     }
   }
   void bakeMutation() {
-    // TODO: Implement this
-    // for (int i = 0; i < NUM_STEPS; i++) {
-    //   this->steps[i].bakeMutation();
-    // }
+    for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
+      for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+        this->stepBases[attrIdx][blockIdx] = this->stepBasesMutated[attrIdx][blockIdx];
+        this->stepMutas[attrIdx][blockIdx] = 0.f;
+        this->applyMutations(attrIdx, blockIdx);
+      }
+    }
+    for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
+      this->recalcInOuts(blockIdx);
+    }
   }
 };
 

@@ -422,8 +422,7 @@ struct Phaseque : Module {
     this->pattern.resetBlockMutation(blockIdx, mask);
   }
   void bakeMutation() {
-    // TODO: implement this
-    // this->pattern.bakeMutation();
+    this->pattern.bakeMutation();
   }
 
   void showCustomSteps() {
