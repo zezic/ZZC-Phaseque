@@ -264,7 +264,7 @@ struct Phaseque : Module {
   void setPolyMode(PolyphonyModes polyMode);
   void goToPattern(unsigned int targetIdx);
   void goToFirstNonEmpty();
-  void jumpToStep(Step step);
+  void jumpToStep(int stepIdx);
 
   void processGlobalParams();
   void processPatternNav();

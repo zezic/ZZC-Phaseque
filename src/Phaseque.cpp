@@ -31,8 +31,14 @@ void Phaseque::goToFirstNonEmpty() {
   }
 }
 
-void Phaseque::jumpToStep(Step step) {
-  phase = eucMod((direction == 1 ? step.in() : step.out()) - phaseParam , 1.0f);
+void Phaseque::jumpToStep(int stepIdx) {
+  unsigned int blockIdx = stepIdx / 4;
+  unsigned int stepInBlockIdx = stepIdx % 4;
+  if (this->polyphonyMode == PolyphonyModes::UNISON) {
+    this->phase = (direction == 1 ? this->pattern.stepInsComputed : this->pattern.stepOutsComputed)[blockIdx][stepInBlockIdx];
+  } else {
+    this->phase = (direction == 1 ? this->pattern.stepMutaInsComputed : this->pattern.stepMutaOutsComputed)[blockIdx][stepInBlockIdx];
+  }
   jump = true;
 }
 
@@ -349,29 +355,29 @@ void Phaseque::processPatternButtons() {
 
 void Phaseque::processJumpInputs() {
   // TODO: Implement this
-  // this->jump = false;
-  // if (absMode || samplesSinceLastReset < 20) {
-  //   return;
-  // }
-  // for (int i = 0; i < NUM_STEPS; i++) {
-  //   if (inputs[STEP_JUMP_INPUT + i].isConnected() && jumpInputsTriggers[i].process(inputs[STEP_JUMP_INPUT + i].getVoltage())) {
-  //     jumpToStep(pattern.steps[i]);
-  //     retrigGapGenerator.trigger(1e-4f);
-  //     return;
-  //   }
-  // }
+  this->jump = false;
+  if (absMode || samplesSinceLastReset < 20) {
+    return;
+  }
+  for (int i = 0; i < NUM_STEPS; i++) {
+    if (inputs[STEP_JUMP_INPUT + i].isConnected() && jumpInputsTriggers[i].process(inputs[STEP_JUMP_INPUT + i].getVoltage())) {
+      jumpToStep(i);
+      retrigGapGenerator.trigger(1e-4f);
+      return;
+    }
+  }
   // if (inputs[RND_JUMP_INPUT].isConnected() && rndJumpInputTrigger.process(inputs[RND_JUMP_INPUT].getVoltage())) {
-  //   int nonMuted[NUM_STEPS];
-  //   int idx = 0;
-  //   for (int i = 0; i < NUM_STEPS; i++) {
-  //     if (!pattern.steps[i].gate ^ !globalGate) { continue; }
-  //     nonMuted[idx] = i;
-  //     idx++;
-  //   }
-  //   if (idx > 0) {
-  //     jumpToStep(pattern.steps[nonMuted[(int) (random::uniform() * idx)]]);
-  //     retrigGapGenerator.trigger(1e-4f);
-  //   }
+    // int nonMuted[NUM_STEPS];
+    // int idx = 0;
+    // for (int i = 0; i < NUM_STEPS; i++) {
+      // if (!pattern.steps[i].gate ^ !globalGate) { continue; }
+      // nonMuted[idx] = i;
+      // idx++;
+    // }
+    // if (idx > 0) {
+      // jumpToStep(pattern.steps[nonMuted[(int) (random::uniform() * idx)]]);
+      // retrigGapGenerator.trigger(1e-4f);
+    // }
   // }
 }
 
@@ -598,8 +604,9 @@ bool Phaseque::processPhaseParam(float sampleTime) {
       float delta = phaseParamInput - phaseParam;
       phaseParam = phaseParam + delta * sampleTime * 50.0f; // Smoothing
     }
+    return phaseParamInput == 0.f;
   }
-  return phaseParamInput == 0.f;
+  return false;
 }
 
 void Phaseque::processTransport(bool phaseWasZeroed, float sampleTime) {
