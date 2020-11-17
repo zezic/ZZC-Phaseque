@@ -12,10 +12,10 @@ inline simd::float_4 eucMod(simd::float_4 a, simd::float_4 b) {
 }
 
 inline simd::float_4 createMask(int x) {
-	__m128i msk8421 = _mm_set_epi32(8, 4, 2, 1);
-	__m128i x_bc = _mm_set1_epi32(x);
-	__m128i t = _mm_and_si128(x_bc, msk8421);
-	return simd::float_4(_mm_castsi128_ps(_mm_cmpeq_epi32(msk8421, t)));
+  __m128i msk8421 = _mm_set_epi32(8, 4, 2, 1);
+  __m128i x_bc = _mm_set1_epi32(x);
+  __m128i t = _mm_and_si128(x_bc, msk8421);
+  return simd::float_4(_mm_castsi128_ps(_mm_cmpeq_epi32(msk8421, t)));
 }
 
 simd::float_4 getBlockExpressions(
@@ -50,26 +50,26 @@ struct Pattern {
   int activeBlockMask = 0;
   bool hasActiveStep = false;
 
-  simd::float_4 hits[SIZE / BLOCK_SIZE];
-  simd::float_4 hitsClean[SIZE / BLOCK_SIZE];
+  simd::float_4 hits[SIZE / BLOCK_SIZE] = { 0.f };
+  simd::float_4 hitsClean[SIZE / BLOCK_SIZE] = { 0.f };
 
   /* Step attributes, mutations and gates */
-  simd::float_4 stepBases[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE];
-  simd::float_4 stepMutas[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE] = {
+  simd::float_4 stepBases[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE] = { { 0.f } };
+  simd::float_4 stepMutas[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE] = { {
     simd::float_4(0.f)
-  };
-  simd::float_4 stepGates[SIZE / BLOCK_SIZE];
-  simd::float_4 stepIns[SIZE / BLOCK_SIZE];
+  } };
+  simd::float_4 stepGates[SIZE / BLOCK_SIZE] = { 0.f };
+  simd::float_4 stepIns[SIZE / BLOCK_SIZE] = { 0.f };
 
-  simd::float_4 stepMutaVectors[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE] = {
+  simd::float_4 stepMutaVectors[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE] = { {
     simd::float_4(0.f)
-  };
-  simd::float_4 stepBasesMutated[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE];
+  } };
+  simd::float_4 stepBasesMutated[STEP_ATTRS_TOTAL][SIZE / BLOCK_SIZE] = { { 0.f } };
 
-  simd::float_4 stepInsComputed[SIZE / BLOCK_SIZE];
-  simd::float_4 stepOutsComputed[SIZE / BLOCK_SIZE];
-  simd::float_4 stepMutaInsComputed[SIZE / BLOCK_SIZE];
-  simd::float_4 stepMutaOutsComputed[SIZE / BLOCK_SIZE];
+  simd::float_4 stepInsComputed[SIZE / BLOCK_SIZE] = { 0.f };
+  simd::float_4 stepOutsComputed[SIZE / BLOCK_SIZE] = { 0.f };
+  simd::float_4 stepMutaInsComputed[SIZE / BLOCK_SIZE] = { 0.f };
+  simd::float_4 stepMutaOutsComputed[SIZE / BLOCK_SIZE] = { 0.f };
 
   simd::float_4 stepAttrDefaults[STEP_ATTRS_TOTAL] = {
     simd::float_4(0.f),
@@ -327,7 +327,7 @@ struct Pattern {
   private: void shiftBy(int delta) {
     int targetShift = (SIZE + SIZE + delta) % SIZE;
     for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
-      float bases[SIZE];
+      float bases[SIZE] = { 0.f };
       for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
         std::copy(this->stepBases[attrIdx][blockIdx].s, this->stepBases[attrIdx][blockIdx].s + BLOCK_SIZE, bases + blockIdx * BLOCK_SIZE);
       }
@@ -336,7 +336,7 @@ struct Pattern {
         std::copy(bases + blockIdx * BLOCK_SIZE, bases + (blockIdx + 1) * BLOCK_SIZE, this->stepBases[attrIdx][blockIdx].s);
       }
 
-      float mutas[SIZE];
+      float mutas[SIZE] = { 0.f };
       for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
         std::copy(this->stepMutas[attrIdx][blockIdx].s, this->stepMutas[attrIdx][blockIdx].s + BLOCK_SIZE, mutas + blockIdx * BLOCK_SIZE);
       }
@@ -347,7 +347,7 @@ struct Pattern {
       }
     }
 
-    float gates[SIZE];
+    float gates[SIZE] = { 0.f };
     for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
       std::copy(this->stepGates[blockIdx].s, this->stepGates[blockIdx].s + BLOCK_SIZE, gates + blockIdx * BLOCK_SIZE);
     }
@@ -407,7 +407,7 @@ struct Pattern {
       simd::float_4* vctrs = &this->stepMutaVectors[attrIdx][blockIdx];
       simd::float_4 mults = this->attrMutaMultipliers[attrIdx];
 
-      float rnds[blockSize];
+      float rnds[blockSize] = { 0.f };
       for (unsigned int i = 0; i < blockSize; i++) {
         rnds[i] = random::uniform();
       }
