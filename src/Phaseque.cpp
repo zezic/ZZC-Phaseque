@@ -34,11 +34,13 @@ void Phaseque::goToFirstNonEmpty() {
 void Phaseque::jumpToStep(int stepIdx) {
   unsigned int blockIdx = stepIdx / 4;
   unsigned int stepInBlockIdx = stepIdx % 4;
+  float targetPhase;
   if (this->polyphonyMode == PolyphonyModes::UNISON) {
-    this->phase = (direction == 1 ? this->pattern.stepInsComputed : this->pattern.stepOutsComputed)[blockIdx][stepInBlockIdx];
+    targetPhase = (direction == 1 ? this->pattern.stepInsComputed : this->pattern.stepOutsComputed)[blockIdx][stepInBlockIdx];
   } else {
-    this->phase = (direction == 1 ? this->pattern.stepMutaInsComputed : this->pattern.stepMutaOutsComputed)[blockIdx][stepInBlockIdx];
+    targetPhase = (direction == 1 ? this->pattern.stepMutaInsComputed : this->pattern.stepMutaOutsComputed)[blockIdx][stepInBlockIdx];
   }
+  this->phase = eucMod(targetPhase - this->phaseParam, 1.f);
   jump = true;
 }
 
