@@ -461,15 +461,11 @@ struct Phaseque : Module {
     this->pattern.resetResolution();
   }
 
-  void adjPatternShift(float factor) {
-    // TODO: implement this
-    // this->pattern.shift = clamp(this->pattern.shift + factor, -baseStepLen, baseStepLen);
-  }
   void setPatternShift(float value) {
-    this->pattern.shift = clamp(value * this->pattern.baseStepLen, -this->pattern.baseStepLen, this->pattern.baseStepLen);
+    this->pattern.setShift(value);
   }
   void resetPatternShift() {
-    this->pattern.shift = 0.f;
+    this->pattern.setShift(0.f);
   }
 
   void copyToNext() {

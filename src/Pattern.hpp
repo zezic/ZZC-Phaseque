@@ -146,10 +146,10 @@ struct Pattern {
   }
 
   void recalcInOuts(unsigned int blockIdx) {
-    this->stepInsComputed[blockIdx] = eucMod(this->stepIns[blockIdx] + this->stepBases[StepAttr::STEP_SHIFT][blockIdx], 1.f);
+    this->stepInsComputed[blockIdx] = eucMod(this->stepIns[blockIdx] + this->stepBases[StepAttr::STEP_SHIFT][blockIdx] + this->shift, 1.f);
     this->stepOutsComputed[blockIdx] = eucMod(this->stepInsComputed[blockIdx] + this->stepBases[StepAttr::STEP_LEN][blockIdx], 1.f);
 
-    this->stepMutaInsComputed[blockIdx] = eucMod(this->stepIns[blockIdx] + this->stepBasesMutated[StepAttr::STEP_SHIFT][blockIdx], 1.f);
+    this->stepMutaInsComputed[blockIdx] = eucMod(this->stepIns[blockIdx] + this->stepBasesMutated[StepAttr::STEP_SHIFT][blockIdx] + this->shift, 1.f);
     this->stepMutaOutsComputed[blockIdx] = eucMod(this->stepMutaInsComputed[blockIdx] + this->stepBasesMutated[StepAttr::STEP_LEN][blockIdx], 1.f);
   }
 
@@ -351,6 +351,13 @@ struct Pattern {
 
   void shiftRight() {
     this->shiftBy(-1);
+  }
+
+  void setShift(float newShift) {
+    this->shift = clamp(newShift * this->baseStepLen, -this->baseStepLen, this->baseStepLen);
+    for (unsigned int blockIdx = 0; blockIdx  < SIZE / BLOCK_SIZE; blockIdx++) {
+      this->recalcInOuts(blockIdx);
+    }
   }
 
   void resetLenghts() {
