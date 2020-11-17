@@ -88,6 +88,14 @@ void Phaseque::processGlobalParams() {
 }
 
 void Phaseque::processPatternNav() {
+  if (this->gridDisplayProducer->patternFlashNeg == -1) {
+    this->patternFlashNeg = -1;
+    this->gridDisplayProducer->patternFlashNeg = 0;
+  }
+  if (this->gridDisplayProducer->patternFlashPos == -1) {
+    this->patternFlashPos = -1;
+    this->gridDisplayProducer->patternFlashPos = 0;
+  }
   if (this->gridDisplayProducer->hasNextPatternRequest) {
     this->pattern.goTo = this->gridDisplayProducer->nextPatternRequest;
     this->gridDisplayProducer->hasNextPatternRequest = false;
@@ -782,7 +790,10 @@ void Phaseque::feedDisplays() {
     for (unsigned int i = 0; i < NUM_PATTERNS; i++) {
       this->gridDisplayConsumer->dirtyMask.set(i, this->patterns[i].hasCustomSteps());
     }
+    this->gridDisplayConsumer->patternFlashNeg = this->patternFlashNeg != -1 ? this->patternFlashNeg : -1;
+    this->gridDisplayConsumer->patternFlashPos = this->patternFlashPos != -1 ? this->patternFlashPos : -1;
   }
+
   if (this->mainDisplayConsumer->consumed) {
     this->mainDisplayConsumer->phase = this->phaseShifted;
     this->mainDisplayConsumer->direction = this->direction;

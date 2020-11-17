@@ -13,6 +13,8 @@ struct GridDisplayConsumer {
   unsigned int currentPatternGoTo = 1;
   std::bitset<NUM_PATTERNS> dirtyMask;
   bool consumed = false;
+  int patternFlashPos = -1;
+  int patternFlashNeg = -1;
 };
 
 struct GridDisplayProducer {
@@ -21,6 +23,8 @@ struct GridDisplayProducer {
 
   unsigned int nextPatternRequest = 0;
   bool hasNextPatternRequest = false;
+  int patternFlashPos = 0;
+  int patternFlashNeg = 0;
 };
 
 struct GridDisplay : BaseDisplayWidget {
@@ -68,6 +72,19 @@ struct GridDisplay : BaseDisplayWidget {
       nvgFill(args.vg);
     }
 
+    if (this->flashes[idx] != 0.f) {
+      NVGcolor color = this->flashes[idx] > 0.f ? posColor : negColor;
+      nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
+      nvgGlobalAlpha(args.vg, std::min(std::abs(this->flashes[idx]), 1.f));
+      nvgBeginPath(args.vg);
+      nvgRoundedRect(args.vg, x, y, patSize, patSize, 1.0);
+      nvgFillColor(args.vg, color);
+      nvgFill(args.vg);
+      this->flashes[idx] *= 0.9f;
+    }
+    nvgGlobalCompositeOperation(args.vg, NVG_SOURCE_OVER);
+    nvgGlobalAlpha(args.vg, 1.f);
+
     Vec textPos = Vec(x + patSize / 2.0f, y + patSize / 2.0f + 2.5f);
     if (idx == currentIdxVal) {
       nvgFillColor(args.vg, black);
@@ -81,6 +98,12 @@ struct GridDisplay : BaseDisplayWidget {
   }
 
   void draw(const DrawArgs &args) override {
+    if (this->consumer->patternFlashNeg != -1) {
+      this->flashes[this->consumer->patternFlashNeg] = -1.f;
+    }
+    if (this->consumer->patternFlashPos != -1) {
+      this->flashes[this->consumer->patternFlashPos] = 1.f;
+    }
     this->drawBackground(args);
     nvgFontSize(args.vg, 9);
     nvgFontFaceId(args.vg, font->handle);
@@ -100,7 +123,7 @@ struct GridDisplayWidget : widget::OpaqueWidget {
   std::shared_ptr<GridDisplayConsumer> consumer;
   std::shared_ptr<GridDisplayProducer> producer;
 
-	widget::FramebufferWidget* fb;
+  widget::FramebufferWidget* fb;
   GridDisplay* pd;
 
   GridDisplayWidget() {
@@ -127,6 +150,12 @@ struct GridDisplayWidget : widget::OpaqueWidget {
     }
     Widget::step();
     this->consumer->consumed = true;
+    if (this->consumer->patternFlashNeg != -1) {
+      this->producer->patternFlashNeg = -1;
+    }
+    if (this->consumer->patternFlashPos != -1) {
+      this->producer->patternFlashPos = -1;
+    }
   }
 
   void onButton(const event::Button &e) override {

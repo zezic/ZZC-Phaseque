@@ -85,31 +85,47 @@ struct PhasequeStepAttrChange : history::ModuleAction {
   float newValue;
 
   void undo() override {
-    // TODO: Implement this
-    // app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
-    // assert(mw);
-    // Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
-    // phaseq->patterns[patternNum].steps[step].setAttrBase(attr, oldValue);
-    // if (phaseq->patternIdx == patternNum) {
-    //   phaseq->pattern.steps[step].setAttrBase(attr, oldValue);
-    //   mw->module->params[paramId].value = oldValue;
-    // } else {
-    //   phaseq->patternFlashNeg = patternNum;
-    // }
+    app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
+    assert(mw);
+    Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
+
+    unsigned int blockIdx = step / phaseq->pattern.blockSize;
+    unsigned int stepInBlockIdx = step % phaseq->pattern.blockSize;
+
+    phaseq->patterns[patternNum].stepBases[attr][blockIdx][stepInBlockIdx] = oldValue;
+    phaseq->patterns[patternNum].applyMutations(attr, blockIdx);
+    phaseq->patterns[patternNum].recalcInOuts(blockIdx);
+    
+    if (phaseq->patternIdx == patternNum) {
+      phaseq->pattern.stepBases[attr][blockIdx][stepInBlockIdx] = oldValue;
+      phaseq->pattern.applyMutations(attr, blockIdx);
+      phaseq->pattern.recalcInOuts(blockIdx);
+      mw->module->params[paramId].value = oldValue;
+      phaseq->renderParamQuantities();
+    }
+    phaseq->patternFlashNeg = patternNum;
   }
 
   void redo() override {
-    // TODO: Implement this
-    // app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
-    // assert(mw);
-    // Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
-    // phaseq->patterns[patternNum].steps[step].setAttrBase(attr, newValue);
-    // if (phaseq->patternIdx == patternNum) {
-    //   phaseq->pattern.steps[step].setAttrBase(attr, newValue);
-    //   mw->module->params[paramId].value = newValue;
-    // } else {
-    //   phaseq->patternFlashPos = patternNum;
-    // }
+    app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
+    assert(mw);
+    Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
+
+    unsigned int blockIdx = step / phaseq->pattern.blockSize;
+    unsigned int stepInBlockIdx = step % phaseq->pattern.blockSize;
+
+    phaseq->patterns[patternNum].stepBases[attr][blockIdx][stepInBlockIdx] = newValue;
+    phaseq->patterns[patternNum].applyMutations(attr, blockIdx);
+    phaseq->patterns[patternNum].recalcInOuts(blockIdx);
+    
+    if (phaseq->patternIdx == patternNum) {
+      phaseq->pattern.stepBases[attr][blockIdx][stepInBlockIdx] = newValue;
+      phaseq->pattern.applyMutations(attr, blockIdx);
+      phaseq->pattern.recalcInOuts(blockIdx);
+      mw->module->params[paramId].value = newValue;
+      phaseq->renderParamQuantities();
+    }
+    phaseq->patternFlashPos = patternNum;
   }
 
   PhasequeStepAttrChange() {

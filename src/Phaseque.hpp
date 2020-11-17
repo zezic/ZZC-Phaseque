@@ -255,8 +255,8 @@ struct Phaseque : Module {
   dsp::ClockDivider lightDivider;
   dsp::ClockDivider buttonsDivider;
 
-  int patternFlashNeg = 0;
-  int patternFlashPos = 0;
+  int patternFlashNeg = -1;
+  int patternFlashPos = -1;
 
   /* CommunicationWithDisplays */
   std::shared_ptr<GridDisplayConsumer> gridDisplayConsumer;
