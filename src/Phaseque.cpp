@@ -509,12 +509,6 @@ simd::float_4 getBlockExpressions(
 
 void Phaseque::renderStepMono() {
   unsigned int stepInBlockIdx = this->pattern.activeStepInBlockIdx;
-  float v[4];
-  this->pattern.stepBasesMutated[StepAttr::STEP_VALUE][this->pattern.activeBlockIdx].store(v);
-  float shift[4];
-  this->pattern.stepBasesMutated[StepAttr::STEP_SHIFT][this->pattern.activeBlockIdx].store(shift);
-  float len[4];
-  this->pattern.stepBasesMutated[StepAttr::STEP_LEN][this->pattern.activeBlockIdx].store(len);
 
   // Calculating the step phase
   simd::float_4 patternPhase = this->phaseShifted;
@@ -522,29 +516,44 @@ void Phaseque::renderStepMono() {
   simd::float_4 stepPhases = (patternPhase - simd::ifelse(patternPhase < stepIns, stepIns - 1.f, stepIns)) / simd::fmax(this->pattern.stepBasesMutated[StepAttr::STEP_LEN][this->pattern.activeBlockIdx], 0.01f);
   stepPhases = clamp(stepPhases, 0.f, 1.f);
 
-  float stepPhasesScalar[4];
-  stepPhases.store(stepPhasesScalar);
-
-  float curve[4];
-  this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_CURVE][this->pattern.activeBlockIdx].store(curve);
-
-  float expressions[4];
-  getBlockExpressions(
-    this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_IN][this->pattern.activeBlockIdx],
-    this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_OUT][this->pattern.activeBlockIdx],
-    this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_POWER][this->pattern.activeBlockIdx],
-    this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_CURVE][this->pattern.activeBlockIdx],
-    stepPhases,
-    this->globalPower,
-    this->globalCurve
-  ).store(expressions);
-
-  outputs[V_OUTPUT].setVoltage(v[stepInBlockIdx]);
-  outputs[SHIFT_OUTPUT].setVoltage(shift[stepInBlockIdx] / this->pattern.baseStepLen * 5.f);
-  outputs[LEN_OUTPUT].setVoltage((len[stepInBlockIdx] / this->pattern.baseStepLen - 1.f) * 5.f);
-  outputs[EXPR_OUTPUT].setVoltage(expressions[stepInBlockIdx] * 5.f);
-  outputs[EXPR_CURVE_OUTPUT].setVoltage(curve[stepInBlockIdx] * 5.f);
-  outputs[PHASE_OUTPUT].setVoltage(stepPhasesScalar[stepInBlockIdx] * 10.f);
+  if (outputs[V_OUTPUT].isConnected()) {
+    float v[4];
+    this->pattern.stepBasesMutated[StepAttr::STEP_VALUE][this->pattern.activeBlockIdx].store(v);
+    outputs[V_OUTPUT].setVoltage(v[stepInBlockIdx]);
+  }
+  if (outputs[SHIFT_OUTPUT].isConnected()) {
+    float shift[4];
+    this->pattern.stepBasesMutated[StepAttr::STEP_SHIFT][this->pattern.activeBlockIdx].store(shift);
+    outputs[SHIFT_OUTPUT].setVoltage(shift[stepInBlockIdx] / this->pattern.baseStepLen * 5.f);
+  }
+  if (outputs[LEN_OUTPUT].isConnected()) {
+    float len[4];
+    this->pattern.stepBasesMutated[StepAttr::STEP_LEN][this->pattern.activeBlockIdx].store(len);
+    outputs[LEN_OUTPUT].setVoltage((len[stepInBlockIdx] / this->pattern.baseStepLen - 1.f) * 5.f);
+  }
+  if (outputs[EXPR_OUTPUT].isConnected()) {
+    float expressions[4];
+    getBlockExpressions(
+      this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_IN][this->pattern.activeBlockIdx],
+      this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_OUT][this->pattern.activeBlockIdx],
+      this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_POWER][this->pattern.activeBlockIdx],
+      this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_CURVE][this->pattern.activeBlockIdx],
+      stepPhases,
+      this->globalPower,
+      this->globalCurve
+    ).store(expressions);
+    outputs[EXPR_OUTPUT].setVoltage(expressions[stepInBlockIdx] * 5.f);
+  }
+  if (outputs[EXPR_CURVE_OUTPUT].isConnected()) {
+    float curve[4];
+    this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_CURVE][this->pattern.activeBlockIdx].store(curve);
+    outputs[EXPR_CURVE_OUTPUT].setVoltage(curve[stepInBlockIdx] * 5.f);
+  }
+  if (outputs[PHASE_OUTPUT].isConnected()) {
+    float stepPhasesScalar[4];
+    stepPhases.store(stepPhasesScalar);
+    outputs[PHASE_OUTPUT].setVoltage(stepPhasesScalar[stepInBlockIdx] * 10.f);
+  }
 }
 
 void Phaseque::renderAttrs(
@@ -559,23 +568,36 @@ void Phaseque::renderAttrs(
   simd::float_4 stepPhases = (patternPhase - stepIns) / simd::fmax((*attrs)[StepAttr::STEP_LEN][blockIdx], 0.01f);
   stepPhases = clamp(stepPhases, 0.f, 1.f);
 
-  simd::float_4 expressions = getBlockExpressions(
-    (*attrs)[StepAttr::STEP_EXPR_IN][blockIdx],
-    (*attrs)[StepAttr::STEP_EXPR_OUT][blockIdx],
-    (*attrs)[StepAttr::STEP_EXPR_POWER][blockIdx],
-    (*attrs)[StepAttr::STEP_EXPR_CURVE][blockIdx],
-    stepPhases,
-    this->globalPower,
-    this->globalCurve
-  );
-
-  outputs[GATE_OUTPUT].setVoltageSimd(this->clutch ? simd::ifelse(*hits, 10.f, 0.f) : 0.f, chanOffset);
-  outputs[V_OUTPUT].setVoltageSimd((*attrs)[StepAttr::STEP_VALUE][blockIdx], chanOffset);
-  outputs[SHIFT_OUTPUT].setVoltageSimd((*attrs)[StepAttr::STEP_SHIFT][blockIdx] / this->pattern.baseStepLen * 5.f, chanOffset);
-  outputs[LEN_OUTPUT].setVoltageSimd((*attrs)[StepAttr::STEP_SHIFT][blockIdx] / this->pattern.baseStepLen - 1.f, chanOffset);
-  outputs[EXPR_OUTPUT].setVoltageSimd(expressions * 5.f, chanOffset);
-  outputs[EXPR_CURVE_OUTPUT].setVoltageSimd((*attrs)[StepAttr::STEP_EXPR_CURVE][blockIdx] * 5.f, chanOffset);
-  outputs[PHASE_OUTPUT].setVoltageSimd(stepPhases * 10.f, chanOffset);
+  if (outputs[GATE_OUTPUT].isConnected()) {
+    outputs[GATE_OUTPUT].setVoltageSimd(this->clutch ? simd::ifelse(*hits, 10.f, 0.f) : 0.f, chanOffset);
+  }
+  if (outputs[V_OUTPUT].isConnected()) {
+    outputs[V_OUTPUT].setVoltageSimd((*attrs)[StepAttr::STEP_VALUE][blockIdx], chanOffset);
+  }
+  if (outputs[SHIFT_OUTPUT].isConnected()) {
+    outputs[SHIFT_OUTPUT].setVoltageSimd((*attrs)[StepAttr::STEP_SHIFT][blockIdx] / this->pattern.baseStepLen * 5.f, chanOffset);
+  }
+  if (outputs[LEN_OUTPUT].isConnected()) {
+    outputs[LEN_OUTPUT].setVoltageSimd((*attrs)[StepAttr::STEP_SHIFT][blockIdx] / this->pattern.baseStepLen - 1.f, chanOffset);
+  }
+  if (outputs[EXPR_OUTPUT].isConnected()) {
+    simd::float_4 expressions = getBlockExpressions(
+      (*attrs)[StepAttr::STEP_EXPR_IN][blockIdx],
+      (*attrs)[StepAttr::STEP_EXPR_OUT][blockIdx],
+      (*attrs)[StepAttr::STEP_EXPR_POWER][blockIdx],
+      (*attrs)[StepAttr::STEP_EXPR_CURVE][blockIdx],
+      stepPhases,
+      this->globalPower,
+      this->globalCurve
+    );
+    outputs[EXPR_OUTPUT].setVoltageSimd(expressions * 5.f, chanOffset);
+  }
+  if (outputs[EXPR_CURVE_OUTPUT].isConnected()) {
+    outputs[EXPR_CURVE_OUTPUT].setVoltageSimd((*attrs)[StepAttr::STEP_EXPR_CURVE][blockIdx] * 5.f, chanOffset);
+  }
+  if (outputs[PHASE_OUTPUT].isConnected()) {
+    outputs[PHASE_OUTPUT].setVoltageSimd(stepPhases * 10.f, chanOffset);
+  }
 }
 
 void Phaseque::renderPolyphonic() {
