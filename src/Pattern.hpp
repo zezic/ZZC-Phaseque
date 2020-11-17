@@ -160,7 +160,7 @@ struct Pattern {
   json_t *dataToJson() {
     json_t *patternJ = json_object();
     json_object_set_new(patternJ, "resolution", json_integer(resolution));
-    json_object_set_new(patternJ, "goTo", json_integer(goTo));
+    json_object_set_new(patternJ, "goTo", json_integer(goTo + 1)); // +1 for compatibility with v1.1.2
     json_object_set_new(patternJ, "shift", json_real(shift));
     json_t *stepsJ = json_array();
     for (unsigned int stepIdx = 0; stepIdx < SIZE; stepIdx++) {
@@ -185,6 +185,10 @@ struct Pattern {
         json_array_append(attrsJ, attrJ);
       }
 
+      // idx and in_ are for compatibility with v1.1.2
+      json_object_set_new(stepJ, "idx", json_integer(stepIdx));
+      json_object_set_new(stepJ, "in_", json_real(stepIdx * this->baseStepLen));
+
       json_object_set_new(stepJ, "attrs", attrsJ);
       json_array_append(stepsJ, stepJ);
     }
@@ -194,7 +198,7 @@ struct Pattern {
 
   void dataFromJson(json_t *patternJ) {
     this->resolution = json_number_value(json_object_get(patternJ, "resolution"));
-    this->goTo = json_number_value(json_object_get(patternJ, "goTo"));
+    this->goTo = json_number_value(json_object_get(patternJ, "goTo")) - 1; // -1 for compatibility with v1.1.2
     this->shift = json_number_value(json_object_get(patternJ, "shift"));
     json_t *stepsJ = json_object_get(patternJ, "steps");
     for (unsigned int stepIdx = 0; stepIdx < SIZE; stepIdx++) {

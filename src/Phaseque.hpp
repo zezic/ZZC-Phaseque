@@ -551,11 +551,12 @@ struct Phaseque : Module {
     json_object_set_new(rootJ, "absMode", json_boolean(absMode));
     json_object_set_new(rootJ, "clutch", json_boolean(clutch));
     json_object_set_new(rootJ, "globalGateInternal", json_boolean(globalGateInternal));
-    json_object_set_new(rootJ, "patternIdx", json_integer(patternIdx));
+    json_object_set_new(rootJ, "patternIdx", json_integer(patternIdx + 1)); // +1 for compatibility with v1.1.2
     json_object_set_new(rootJ, "wait", json_boolean(wait));
     json_object_set_new(rootJ, "polyphonyMode", json_integer(polyphonyMode));
 
     json_t *patternsJ = json_array();
+    json_array_append_new(patternsJ, json_null()); // Dummy for compatibility with v1.1.2
     for (int i = 0; i < NUM_PATTERNS; i++) {
       if (patterns[i].isClean()) {
         json_array_append_new(patternsJ, json_null());
@@ -573,7 +574,7 @@ struct Phaseque : Module {
     json_t *absModeJ = json_object_get(rootJ, "absMode");
     json_t *clutchJ = json_object_get(rootJ, "clutch");
     json_t *globalGateInternalJ = json_object_get(rootJ, "globalGateInternal");
-    json_t *patternIdxJ = json_object_get(rootJ, "patternIdx");
+    json_t *patternIdxJ = json_object_get(rootJ, "patternIdx") - 1; // -1 for compatibility with v1.1.2
     json_t *waitJ = json_object_get(rootJ, "wait");
     json_t *polyphonyModeJ = json_object_get(rootJ, "polyphonyMode");
     if (tempoTrackJ) {
