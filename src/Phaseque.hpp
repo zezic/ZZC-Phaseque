@@ -509,6 +509,7 @@ struct Phaseque : Module {
 
   void takeOutCurrentPattern() {
     this->pattern = this->patterns[patternIdx];
+    this->pattern.applyGlobalShift(this->globalShift);
     this->renderParamQuantities();
   }
 

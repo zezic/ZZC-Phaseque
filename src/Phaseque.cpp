@@ -45,10 +45,15 @@ void Phaseque::processGlobalParams() {
   }
 
   // Shift
+  float newGlobalShift;
   if (inputs[GLOBAL_SHIFT_INPUT].isConnected()) {
-    globalShift = params[GLOBAL_SHIFT_PARAM].getValue() + clamp(inputs[GLOBAL_SHIFT_INPUT].getVoltage() * 0.2f * baseStepLen, -baseStepLen, baseStepLen);
+    newGlobalShift = params[GLOBAL_SHIFT_PARAM].getValue() + clamp(inputs[GLOBAL_SHIFT_INPUT].getVoltage() * 0.2f * baseStepLen, -baseStepLen, baseStepLen);
   } else {
-    globalShift = params[GLOBAL_SHIFT_PARAM].getValue();
+    newGlobalShift = params[GLOBAL_SHIFT_PARAM].getValue();
+  }
+  if (newGlobalShift != globalShift) {
+    this->globalShift = newGlobalShift;
+    this->pattern.applyGlobalShift(this->globalShift);
   }
 
   // Length
