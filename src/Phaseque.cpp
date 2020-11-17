@@ -57,10 +57,15 @@ void Phaseque::processGlobalParams() {
   }
 
   // Length
+  float newGlobalLen;
   if (inputs[GLOBAL_LEN_INPUT].isConnected()) {
-    globalLen = params[GLOBAL_LEN_PARAM].getValue() * (clamp(inputs[GLOBAL_LEN_INPUT].getVoltage(), -5.0f, 4.999f) * 0.2f + 1.0f);
+    newGlobalLen = params[GLOBAL_LEN_PARAM].getValue() * (clamp(inputs[GLOBAL_LEN_INPUT].getVoltage(), -4.999f, 4.999f) * 0.2f + 1.0f);
   } else {
-    globalLen = params[GLOBAL_LEN_PARAM].getValue();
+    newGlobalLen = params[GLOBAL_LEN_PARAM].getValue();
+  }
+  if (newGlobalLen != globalLen) {
+    this->globalLen = newGlobalLen;
+    this->pattern.applyGlobalLen(this->globalLen);
   }
 }
 
@@ -393,7 +398,7 @@ void Phaseque::processIndicators() {
       );
     }
 
-    lights[GATE_SWITCH_LED + stepIdx].setBrightness((simd::movemask(this->pattern.stepGates[blockIdx]) & (1 << stepInBlockIdx)) ^ !globalGate);
+    lights[GATE_SWITCH_LED + stepIdx].setBrightness(bool(simd::movemask(this->pattern.stepGates[blockIdx]) & (1 << stepInBlockIdx)) ^ !globalGate);
   }
 
   if (this->wait) {
@@ -809,7 +814,7 @@ void Phaseque::process(const ProcessArgs &args) {
 
 
   if (this->polyphonyMode == PolyphonyModes::MONOPHONIC) {
-    this->pattern.findStepsForPhase(this->phaseShifted);
+    this->pattern.findStepsForPhase(this->phaseShifted, this->globalGate);
     this->pattern.findMonoStep();
     for (int i = 0; i < NUM_STEPS; i++) {
       outputs[STEP_GATE_OUTPUT + i].setVoltage(0.f);
@@ -824,11 +829,11 @@ void Phaseque::process(const ProcessArgs &args) {
     bool retrigGap = retrigGapGenerator.process(sampleTime);
     outputs[GATE_OUTPUT].setVoltage(this->clutch && this->pattern.hasActiveStep && !retrigGap ? 10.f : 0.f);
   } else if (this->polyphonyMode == PolyphonyModes::POLYPHONIC) {
-    this->pattern.findStepsForPhase(this->phaseShifted);
+    this->pattern.findStepsForPhase(this->phaseShifted, this->globalGate);
     this->renderPolyphonic();
   } else if (this->polyphonyMode == PolyphonyModes::UNISON) {
-    this->pattern.findStepsForPhase(this->phaseShifted);
-    this->pattern.findCleanStepsForPhase(this->phaseShifted);
+    this->pattern.findStepsForPhase(this->phaseShifted, this->globalGate);
+    this->pattern.findCleanStepsForPhase(this->phaseShifted, this->globalGate);
     this->renderUnison();
   }
 

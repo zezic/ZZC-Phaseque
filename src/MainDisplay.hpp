@@ -117,7 +117,7 @@ struct MainDisplayWidget : BaseDisplayWidget {
       nvgGlobalAlpha(args.vg, std::min(mutationStrength * 0.5f, 1.f));
     }
 
-    float len = workArea * ((mutated ? this->consumer->pattern.stepBasesMutated : this->consumer->pattern.stepBases)[StepAttr::STEP_LEN][blockIdx][stepInBlockIdx]);
+    float len = workArea * ((mutated ? this->consumer->pattern.stepBasesMutated : this->consumer->pattern.stepBases)[StepAttr::STEP_LEN][blockIdx][stepInBlockIdx]) * this->consumer->pattern.globalLen;
     nvgBeginPath(args.vg);
 
     unsigned int curveReso = 24;
@@ -218,7 +218,7 @@ struct MainDisplayWidget : BaseDisplayWidget {
       unsigned int blockIdx = stepIdx / 4;
       unsigned int stepInBlockIdx = stepIdx % 4;
 
-      bool gate = (simd::movemask(this->consumer->pattern.stepGates[blockIdx]) & 1 << stepInBlockIdx) ^ !this->consumer->globalGate;
+      bool gate = bool(simd::movemask(this->consumer->pattern.stepGates[blockIdx]) & (1 << stepInBlockIdx)) ^ !this->consumer->globalGate;
       bool active = false;
 
       if (this->consumer->polyphonyMode == PolyphonyModes::MONOPHONIC) {

@@ -39,6 +39,7 @@ struct Pattern {
   unsigned int size = SIZE;
   unsigned int blockSize = BLOCK_SIZE;
   float baseStepLen = 1.f / SIZE;
+  float globalLen = 1.f;
 
   unsigned int activeStepIdx = 0;
   unsigned int lastActiveStepIdx = 0;
@@ -98,21 +99,21 @@ struct Pattern {
     { -1.0f, 1.0f }
   };
 
-  void findStepsForPhase(float phase) {
+  void findStepsForPhase(float phase, bool globalGate) {
     /* Search for phase-step intersection */
     for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
       simd::float_4 inMod = this->stepMutaInsComputed[blockIdx];
       simd::float_4 outMod = this->stepMutaOutsComputed[blockIdx];
-      this->hits[blockIdx] = ((inMod <= phase) ^ (phase < outMod) ^ (inMod < outMod)) & this->stepGates[blockIdx];
+      this->hits[blockIdx] = ((inMod <= phase) ^ (phase < outMod) ^ (inMod < outMod)) & (this->stepGates[blockIdx] ^ createMask(globalGate ? 0b0000 : 0b1111));
     }
   }
 
-  void findCleanStepsForPhase(float phase) {
+  void findCleanStepsForPhase(float phase, bool globalGate) {
     /* Search mutated steps for phase-step intersection */
     for (unsigned int blockIdx = 0; blockIdx < SIZE / BLOCK_SIZE; blockIdx++) {
       simd::float_4 inMod = this->stepInsComputed[blockIdx];
       simd::float_4 outMod = this->stepOutsComputed[blockIdx];
-      this->hitsClean[blockIdx] = ((inMod <= phase) ^ (phase < outMod) ^ (inMod < outMod)) & this->stepGates[blockIdx];
+      this->hitsClean[blockIdx] = ((inMod <= phase) ^ (phase < outMod) ^ (inMod < outMod)) & (this->stepGates[blockIdx] ^ createMask(globalGate ? 0b0000 : 0b1111));
     }
   }
 
@@ -120,7 +121,7 @@ struct Pattern {
     this->lastActiveStepIdx = this->activeStepIdx;
     for (unsigned int blockOffset = 0; blockOffset < SIZE / BLOCK_SIZE; blockOffset++) {
       unsigned int blockIdx = SIZE / BLOCK_SIZE - blockOffset - 1;
-      int blockMask = simd::movemask(this->hits[blockIdx] & this->stepGates[blockIdx]);
+      int blockMask = simd::movemask(this->hits[blockIdx]);
       if (blockMask == 0) { continue; } // No hits in this block
       for (unsigned int stepInBlockOffset = 0; stepInBlockOffset < BLOCK_SIZE; stepInBlockOffset++) {
         unsigned int stepInBlockIdx = BLOCK_SIZE - stepInBlockOffset - 1;
@@ -148,10 +149,10 @@ struct Pattern {
 
   void recalcInOuts(unsigned int blockIdx) {
     this->stepInsComputed[blockIdx] = eucMod(this->stepIns[blockIdx] + this->stepBases[StepAttr::STEP_SHIFT][blockIdx] + this->shift + this->globalShift, 1.f);
-    this->stepOutsComputed[blockIdx] = eucMod(this->stepInsComputed[blockIdx] + this->stepBases[StepAttr::STEP_LEN][blockIdx], 1.f);
+    this->stepOutsComputed[blockIdx] = eucMod(this->stepInsComputed[blockIdx] + this->stepBases[StepAttr::STEP_LEN][blockIdx] * this->globalLen, 1.f);
 
     this->stepMutaInsComputed[blockIdx] = eucMod(this->stepIns[blockIdx] + this->stepBasesMutated[StepAttr::STEP_SHIFT][blockIdx] + this->shift + this->globalShift, 1.f);
-    this->stepMutaOutsComputed[blockIdx] = eucMod(this->stepMutaInsComputed[blockIdx] + this->stepBasesMutated[StepAttr::STEP_LEN][blockIdx], 1.f);
+    this->stepMutaOutsComputed[blockIdx] = eucMod(this->stepMutaInsComputed[blockIdx] + this->stepBasesMutated[StepAttr::STEP_LEN][blockIdx] * this->globalLen, 1.f);
   }
 
   json_t *dataToJson() {
@@ -165,9 +166,11 @@ struct Pattern {
       unsigned int stepInBlockIdx = stepIdx % BLOCK_SIZE;
 
       json_t *stepJ = json_object();
+
       json_object_set_new(stepJ, "gate", json_boolean(
-        simd::movemask(this->stepGates[blockIdx]) & 1 << stepInBlockIdx
+        bool(simd::movemask(this->stepGates[blockIdx]) & (1 << stepInBlockIdx))
       ));
+
       json_t *attrsJ = json_array();
       for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
         json_t *attrJ = json_object();
@@ -179,6 +182,7 @@ struct Pattern {
         ));
         json_array_append(attrsJ, attrJ);
       }
+
       json_object_set_new(stepJ, "attrs", attrsJ);
       json_array_append(stepsJ, stepJ);
     }
@@ -197,7 +201,7 @@ struct Pattern {
       json_t *stepJ = json_array_get(stepsJ, stepIdx);
       bool gate = json_boolean_value(json_object_get(stepJ, "gate"));
       if (!gate) {
-        this->stepGates[blockIdx] ^= simd::movemaskInverse<simd::float_4>(1 << stepInBlockIdx);
+        this->stepGates[blockIdx] ^= createMask(1 << stepInBlockIdx);
       }
       json_t *attrsJ = json_object_get(stepJ, "attrs");
       for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
@@ -218,6 +222,9 @@ struct Pattern {
     }
     for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
       for (unsigned int blockIdx = 0; blockIdx  < SIZE / BLOCK_SIZE; blockIdx++) {
+        if (simd::movemask(this->stepGates[blockIdx]) != 0b1111) {
+          return false;
+        }
         if (simd::movemask(this->stepBases[attrIdx][blockIdx] != this->stepAttrDefaults[attrIdx]) ||
             simd::movemask(this->stepMutas[attrIdx][blockIdx] != 0.f)) {
           return false;
@@ -363,6 +370,13 @@ struct Pattern {
 
   void applyGlobalShift(float newShift) {
     this->globalShift = newShift;
+    for (unsigned int blockIdx = 0; blockIdx  < SIZE / BLOCK_SIZE; blockIdx++) {
+      this->recalcInOuts(blockIdx);
+    }
+  }
+
+  void applyGlobalLen(float newLen) {
+    this->globalLen = newLen;
     for (unsigned int blockIdx = 0; blockIdx  < SIZE / BLOCK_SIZE; blockIdx++) {
       this->recalcInOuts(blockIdx);
     }

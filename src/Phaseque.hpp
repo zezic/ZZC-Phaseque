@@ -510,11 +510,11 @@ struct Phaseque : Module {
   void takeOutCurrentPattern() {
     this->pattern = this->patterns[patternIdx];
     this->pattern.applyGlobalShift(this->globalShift);
+    this->pattern.applyGlobalLen(this->globalLen);
     this->renderParamQuantities();
   }
 
   void renderParamQuantities() {
-    // TODO: implement this
     this->paramQuantities[PATTERN_RESO_PARAM]->setValue(this->pattern.resolution);
     this->paramQuantities[PATTERN_SHIFT_PARAM]->setValue(this->pattern.shift / this->pattern.baseStepLen);
     for (unsigned int stepIdx = 0; stepIdx < this->pattern.size; stepIdx++) {
@@ -526,14 +526,10 @@ struct Phaseque : Module {
         );
       }
     }
-    // for (int s = 0; s < NUM_STEPS; s++) {
-    //   for (int a = 0; a < STEP_ATTRS_TOTAL; a++) {
-    //     paramQuantities[STEP_VALUE_PARAM + a * NUM_STEPS + s]->setValue(pattern.steps[s].attrs[a].base);
-    //   }
-    // }
   }
 
   void onReset() override {
+    this->globalGateInternal = true;
     for (int i = 0; i < NUM_PATTERNS; i++) {
       this->patterns[i].init();
       this->patterns[i].goTo = eucMod(i + 1, NUM_PATTERNS);
