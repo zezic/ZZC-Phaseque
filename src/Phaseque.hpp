@@ -628,6 +628,7 @@ struct Phaseque : Module {
       useCompatibleBPMCV = json_boolean_value(useCompatibleBPMCVJ);
     } else {
       useCompatibleBPMCV = false; // Fallback to pre v1.1.3 default behavior
+      this->params[USE_COMPATIBLE_BPM_CV_PARAM].setValue(0.f);
     }
     if (snapCVJ) { snapCV = json_boolean_value(snapCVJ); }
 
