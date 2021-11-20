@@ -3,8 +3,8 @@
 #include <iomanip>
 #include "ZZC.hpp"
 #include "Step.hpp"
-#include "simd/functions.hpp"
-#include "simd/vector.hpp"
+// #include "simd/functions.hpp"
+// #include "simd/vector.hpp"
 
 inline simd::float_4 eucMod(simd::float_4 a, simd::float_4 b) {
   simd::float_4 mod = simd::fmod(a, b);

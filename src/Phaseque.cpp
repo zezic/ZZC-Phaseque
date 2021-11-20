@@ -1,3 +1,5 @@
+#include "ZZC.hpp"
+
 #ifndef WIDGETS_H
 #define WIDGETS_H
 #include "../ZZC/src/widgets.hpp"
@@ -5,7 +7,6 @@
 
 #include <ctime>
 
-#include "ZZC.hpp"
 #include "Phaseque.hpp"
 #include "PhasequeWidget.hpp"
 #include "helpers.hpp"

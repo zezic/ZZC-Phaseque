@@ -13,6 +13,8 @@ std::vector<std::string> StepAttrNames = {
 };
 
 struct ZZC_PhasequePatternResoKnob : SvgKnob {
+  float oldValue = 0.0;
+
   ZZC_PhasequePatternResoKnob() {
     setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/knobs/ZZC-Knob-25-Encoder.svg")));
     shadow->box.size = Vec(29, 29);
@@ -25,15 +27,28 @@ struct ZZC_PhasequePatternResoKnob : SvgKnob {
     maxAngle = M_PI * 4;
   }
 
+  void onDragStart(const DragStartEvent& e) override {
+    if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+      return;
+
+    engine::ParamQuantity* pq = getParamQuantity();
+    if (pq) {
+      this->oldValue = pq->getSmoothValue();
+    }
+
+    SvgKnob::onDragStart(e);
+  }
+
   void onDragEnd(const event::DragEnd &e) override {
     if (e.button != GLFW_MOUSE_BUTTON_LEFT)
       return;
 
     APP->window->cursorUnlock();
 
+    engine::ParamQuantity* paramQuantity = this->getParamQuantity();
     if (paramQuantity) {
       float newValue = paramQuantity->getValue();
-      if (oldValue != newValue) {
+      if (this->oldValue != newValue) {
         PhasequePatternResoChange *h = new PhasequePatternResoChange;
         h->moduleId = paramQuantity->module->id;
         h->paramId = paramQuantity->paramId;
@@ -46,15 +61,13 @@ struct ZZC_PhasequePatternResoKnob : SvgKnob {
       }
     }
   }
-
-  void randomize() override {
-  }
 };
 
 struct ZZC_DisplayKnob : SvgKnob {
   ZZC_DirectKnobDisplay *disp = nullptr;
   float strokeWidth = 1.5f;
   bool unipolar = false;
+  float oldValue = 0.0;
 
   ZZC_DisplayKnob() {
     smooth = false;
@@ -63,6 +76,18 @@ struct ZZC_DisplayKnob : SvgKnob {
     disp->box.pos = math::Vec(0, 0);
     disp->strokeWidth = strokeWidth;
     disp->box.size = fb->box.size;
+  }
+
+  void onDragStart(const DragStartEvent& e) override {
+    if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+      return;
+
+    engine::ParamQuantity* pq = getParamQuantity();
+    if (pq) {
+      this->oldValue = pq->getSmoothValue();
+    }
+
+    SvgKnob::onDragStart(e);
   }
 
   void recalcSizes() {
@@ -80,14 +105,13 @@ struct ZZC_DisplayKnob : SvgKnob {
   }
 
   void onChange(const event::Change &e) override {
+    engine::ParamQuantity* paramQuantity = this->getParamQuantity();
     if (paramQuantity) {
       disp->setLimits(paramQuantity->getMinValue(), paramQuantity->getMaxValue());
       disp->value = paramQuantity->getValue();
     }
     SvgKnob::onChange(e);
   }
-
-  void randomize() override {};
 };
 
 struct ZZC_PhasequePatternShiftKnob : ZZC_DisplayKnob {
@@ -107,9 +131,10 @@ struct ZZC_PhasequePatternShiftKnob : ZZC_DisplayKnob {
 
     APP->window->cursorUnlock();
 
+    engine::ParamQuantity* paramQuantity = this->getParamQuantity();
     if (paramQuantity) {
       float newValue = paramQuantity->getSmoothValue();
-      if (oldValue != newValue) {
+      if (this->oldValue != newValue) {
         PhasequePatternShiftChange *h = new PhasequePatternShiftChange;
         h->moduleId = paramQuantity->module->id;
         h->paramId = paramQuantity->paramId;
@@ -151,6 +176,7 @@ struct ZZC_PhasequeAttrKnob : ZZC_DisplayKnob {
 
     APP->window->cursorUnlock();
 
+    engine::ParamQuantity* paramQuantity = this->getParamQuantity();
     if (paramQuantity) {
       float newValue = paramQuantity->getSmoothValue();
       if (oldValue != newValue) {
@@ -172,17 +198,21 @@ struct ZZC_PhasequeAttrKnob : ZZC_DisplayKnob {
 };
 
 struct ZZC_PhasequeXYDisplayWidget : XYDisplayWidget {
+  float oldValueX = 0.0;
+  float oldValueY = 0.0;
+
   ZZC_PhasequeXYDisplayWidget() {
   }
+
   void onDragEnd(const event::DragEnd &e) override {
     if (e.button != GLFW_MOUSE_BUTTON_LEFT)
       return;
 
     APP->window->cursorUnlock();
 
-    if (paramQuantityX) {
+    if (this->paramQuantityX) {
       float newValueX = paramQuantityX->getValue();
-      if (oldValueX != newValueX) {
+      if (this->oldValueX != newValueX) {
         PhasequeStepAttrChange *h = new PhasequeStepAttrChange;
         h->moduleId = paramQuantityX->module->id;
         h->paramId = paramQuantityX->paramId;
@@ -197,9 +227,9 @@ struct ZZC_PhasequeXYDisplayWidget : XYDisplayWidget {
         APP->history->push(h);
       }
     }
-    if (paramQuantityY) {
+    if (this->paramQuantityY) {
       float newValueY = paramQuantityY->getValue();
-      if (oldValueY != newValueY) {
+      if (this->oldValueY != newValueY) {
         PhasequeStepAttrChange *h = new PhasequeStepAttrChange;
         h->moduleId = paramQuantityY->module->id;
         h->paramId = paramQuantityY->paramId;

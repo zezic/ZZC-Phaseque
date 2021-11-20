@@ -1,6 +1,5 @@
 #pragma once
-#include "rack0.hpp"
-#include "window.hpp"
+#include <rack.hpp>
 
 enum PolyphonyModes {
   MONOPHONIC,

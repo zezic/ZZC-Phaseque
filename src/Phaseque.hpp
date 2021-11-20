@@ -1,6 +1,6 @@
 #pragma once
-#include "rack0.hpp"
 #include <algorithm> // for std:rotate
+#include <iostream>
 
 #include "ZZC.hpp"
 #include "Pattern.hpp"
@@ -300,12 +300,13 @@ struct Phaseque : Module {
 
   struct PatternResoParamQuantity : ParamQuantity {
     void setValue(float value) override {
+      std::cout << value << std::endl;
       if (!module)
         return;
       Phaseque* phaseq = static_cast<Phaseque*>(module);
       value = math::clampSafe(value, getMinValue(), getMaxValue());
       phaseq->setPatternReso(value);
-      APP->engine->setParam(module, paramId, value);
+      // APP->engine->setParam(module, paramId, value);
     }
   };
 
@@ -316,7 +317,7 @@ struct Phaseque : Module {
       Phaseque* phaseq = static_cast<Phaseque*>(module);
       value = math::clampSafe(value, getMinValue(), getMaxValue());
       phaseq->setPatternShift(value);
-      APP->engine->setParam(module, paramId, value);
+      // APP->engine->setParam(module, paramId, value);
     }
   };
 
@@ -327,7 +328,7 @@ struct Phaseque : Module {
       float delta = value - getValue();
       Phaseque* phaseq = static_cast<Phaseque*>(module);
       phaseq->mutate(delta);
-      APP->engine->setParam(module, paramId, value);
+      // APP->engine->setParam(module, paramId, value);
     }
   };
 
@@ -344,7 +345,7 @@ struct Phaseque : Module {
       Phaseque* phaseq = static_cast<Phaseque*>(module);
       value = math::clampSafe(value, getMinValue(), getMaxValue());
       phaseq->setStepAttrBase(item, attr, value);
-      APP->engine->setParam(module, paramId, value);
+      // APP->engine->setParam(module, paramId, value);
     }
   };
 
