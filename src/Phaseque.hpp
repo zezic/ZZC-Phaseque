@@ -350,6 +350,14 @@ struct Phaseque : Module {
       phaseq->setPatternShift(value);
       // APP->engine->setParam(module, paramId, value);
     }
+
+    float getValue() override {
+      if (!module) {
+        return this->defaultValue;
+      }
+      Phaseque* phaseq = static_cast<Phaseque*>(module);
+      return phaseq->getPatternShift();
+    }
   };
 
   struct PatternMutaParamQuantity : ParamQuantity {
@@ -518,6 +526,9 @@ struct Phaseque : Module {
     this->pattern.resetResolution();
   }
 
+  float getPatternShift() {
+    return this->pattern.getShift();
+  }
   void setPatternShift(float value) {
     this->pattern.setShift(value);
   }

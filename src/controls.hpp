@@ -30,7 +30,7 @@ struct ZZC_PhasequePatternResoKnob : SvgKnob {
     SvgKnob::onDragMove(e);
     engine::ParamQuantity* pq = getParamQuantity();
     if (pq) {
-      auto val = pq->getSmoothValue();
+      auto val = pq->getValue();
       pq->setValue(val);
     }
   }
@@ -41,7 +41,7 @@ struct ZZC_PhasequePatternResoKnob : SvgKnob {
 
     engine::ParamQuantity* pq = getParamQuantity();
     if (pq) {
-      this->oldValue = pq->getSmoothValue();
+      this->oldValue = pq->getValue();
     }
 
     SvgKnob::onDragStart(e);
@@ -103,7 +103,9 @@ struct ZZC_DisplayKnob : SvgKnob {
 
     engine::ParamQuantity* pq = getParamQuantity();
     if (pq) {
-      this->oldValue = pq->getSmoothValue();
+      float oldVal = pq->getValue();
+      std::cout << "oldVal: " << oldVal << std::endl;
+      this->oldValue = oldVal;
     }
 
     SvgKnob::onDragStart(e);
@@ -182,6 +184,17 @@ struct ZZC_PhasequePatternShiftKnob : ZZC_DisplayKnob {
         APP->history->push(h);
       }
     }
+  }
+
+  void step() override {
+    engine::ParamQuantity* paramQuantity = this->getParamQuantity();
+    if (paramQuantity) {
+      this->valueToDraw = paramQuantity->getValue();
+    }
+    if (this->valueToDraw != this->lastDrawnValue) {
+      this->fb->setDirty();
+    }
+    SvgKnob::step();
   }
 };
 

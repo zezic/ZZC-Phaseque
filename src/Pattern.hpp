@@ -368,6 +368,10 @@ struct Pattern {
     this->shiftBy(-1);
   }
 
+  float getShift() {
+    return this->shift / this->baseStepLen;
+  }
+
   void setShift(float newShift) {
     this->shift = newShift * this->baseStepLen;
     for (unsigned int blockIdx = 0; blockIdx  < SIZE / BLOCK_SIZE; blockIdx++) {
