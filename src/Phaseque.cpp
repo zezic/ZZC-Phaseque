@@ -111,14 +111,15 @@ void Phaseque::processPatternNav() {
   if (this->wait) {
     return;
   }
+
   if (inputs[SEQ_INPUT].isConnected() && seqInputTrigger.process(inputs[SEQ_INPUT].getVoltage())) {
     if (patternIdx != pattern.goTo) {
       goToPattern(pattern.goTo);
       return;
     }
   }
-  if (inputs[GOTO_INPUT].isConnected()) {
 
+  if (inputs[GOTO_INPUT].isConnected()) {
     bool ptrnInputIsConnected = inputs[PTRN_INPUT].isConnected();
     unsigned int target = ptrnInputIsConnected ? eucMod((int) std::floor(inputs[PTRN_INPUT].getVoltage() * 12.f), NUM_PATTERNS) : 0;
     if (goToInputTrigger.process(inputs[GOTO_INPUT].getVoltage())) {
@@ -139,6 +140,7 @@ void Phaseque::processPatternNav() {
       }
     }
   }
+
   if (inputs[PREV_INPUT].isConnected() && prevPtrnInputTrigger.process(inputs[PREV_INPUT].getVoltage())) {
     for (int i = this->patternIdx - 1; i >= 0; i--) {
       if (patterns[i].hasCustomSteps()) {
@@ -153,6 +155,7 @@ void Phaseque::processPatternNav() {
       }
     }
   }
+
   if (inputs[NEXT_INPUT].isConnected() && nextPtrnInputTrigger.process(inputs[NEXT_INPUT].getVoltage())) {
     for (unsigned int i = this->patternIdx + 1; i < NUM_PATTERNS; i++) {
       if (patterns[i].hasCustomSteps()) {
@@ -167,6 +170,7 @@ void Phaseque::processPatternNav() {
       }
     }
   }
+
   if (inputs[RND_INPUT].isConnected() && firstInputTrigger.process(inputs[RND_INPUT].getVoltage())) {
     unsigned int nonEmpty[NUM_PATTERNS];
     unsigned int idx = 0;
@@ -182,6 +186,7 @@ void Phaseque::processPatternNav() {
       return;
     }
   }
+
   if (inputs[LEFT_INPUT].isConnected() && leftInputTrigger.process(inputs[LEFT_INPUT].getVoltage())) {
     Limits limits = getRowLimits(this->patternIdx);
     for (int i = ((int) patternIdx) - 1; i >= (int) limits.low; i--) {
@@ -197,6 +202,7 @@ void Phaseque::processPatternNav() {
       }
     }
   }
+
   if (inputs[RIGHT_INPUT].isConnected() && rightInputTrigger.process(inputs[RIGHT_INPUT].getVoltage())) {
     Limits limits = getRowLimits(this->patternIdx);
     for (unsigned int i = patternIdx + 1; i < limits.high; i++) {
@@ -212,6 +218,7 @@ void Phaseque::processPatternNav() {
       }
     }
   }
+
   if (inputs[DOWN_INPUT].isConnected() && downInputTrigger.process(inputs[DOWN_INPUT].getVoltage())) {
     Limits limits = getColumnLimits(patternIdx);
     for (int i = patternIdx - 4; i >= (int) limits.low; i -= 4) {
@@ -227,6 +234,7 @@ void Phaseque::processPatternNav() {
       }
     }
   }
+
   if (inputs[UP_INPUT].isConnected() && upInputTrigger.process(inputs[UP_INPUT].getVoltage())) {
     Limits limits = getColumnLimits(patternIdx);
     for (int i = patternIdx + 4; i <= (int) limits.high; i += 4) {
@@ -242,6 +250,7 @@ void Phaseque::processPatternNav() {
       }
     }
   }
+
 }
 
 void Phaseque::processButtons() {

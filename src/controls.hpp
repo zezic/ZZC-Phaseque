@@ -76,6 +76,8 @@ struct ZZC_DisplayKnob : SvgKnob {
   float strokeWidth = 1.5f;
   bool unipolar = false;
   float oldValue = 0.0;
+  float lastDrawnValue = 0.0;
+  float valueToDraw = 0.0;
 
   ZZC_DisplayKnob() {
     smooth = false;
@@ -125,9 +127,26 @@ struct ZZC_DisplayKnob : SvgKnob {
     engine::ParamQuantity* paramQuantity = this->getParamQuantity();
     if (paramQuantity) {
       disp->setLimits(paramQuantity->getMinValue(), paramQuantity->getMaxValue());
-      disp->value = paramQuantity->getValue();
+      this->valueToDraw = paramQuantity->getValue();
     }
     SvgKnob::onChange(e);
+  }
+
+  void step() override {
+    engine::ParamQuantity* paramQuantity = this->getParamQuantity();
+    if (paramQuantity) {
+      this->valueToDraw = paramQuantity->getValue();
+    }
+    if (this->valueToDraw != this->lastDrawnValue) {
+      this->fb->setDirty();
+    }
+    SvgKnob::step();
+  }
+
+	void draw(const DrawArgs& args) override {
+    disp->value = this->valueToDraw;
+    SvgKnob::draw(args);
+    this->lastDrawnValue = this->valueToDraw;
   }
 };
 
