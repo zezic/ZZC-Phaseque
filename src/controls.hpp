@@ -21,10 +21,18 @@ struct ZZC_PhasequePatternResoKnob : SvgKnob {
     shadow->box.pos = Vec(-2, 2);
     shadow->blurRadius = 15.0f;
     shadow->opacity = 1.0f;
-    // speed = 8.f;
     smooth = false;
     snap = true;
     maxAngle = M_PI * 4;
+  }
+
+  void onDragMove(const DragMoveEvent& e) override {
+    SvgKnob::onDragMove(e);
+    engine::ParamQuantity* pq = getParamQuantity();
+    if (pq) {
+      auto val = pq->getSmoothValue();
+      pq->setValue(val);
+    }
   }
 
   void onDragStart(const DragStartEvent& e) override {
