@@ -49,9 +49,9 @@ struct PhasequePatternShiftChange : history::ModuleAction {
     app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
     assert(mw);
     Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
-    phaseq->patterns[patternNum].shift = oldValue;
+    phaseq->patterns[patternNum].setShift(oldValue);
     if (phaseq->patternIdx == patternNum) {
-      phaseq->pattern.shift = oldValue;
+      phaseq->pattern.setShift(oldValue);
       mw->module->params[paramId].value = oldValue;
     } else {
       phaseq->patternFlashNeg = patternNum;
@@ -62,9 +62,9 @@ struct PhasequePatternShiftChange : history::ModuleAction {
     app::ModuleWidget *mw = APP->scene->rack->getModule(moduleId);
     assert(mw);
     Phaseque* phaseq = static_cast<Phaseque*>(mw->module);
-    phaseq->patterns[patternNum].shift = newValue;
+    phaseq->patterns[patternNum].setShift(newValue);
     if (phaseq->patternIdx == patternNum) {
-      phaseq->pattern.shift = newValue;
+      phaseq->pattern.setShift(newValue);
       mw->module->params[paramId].value = newValue;
     } else {
       phaseq->patternFlashPos = patternNum;

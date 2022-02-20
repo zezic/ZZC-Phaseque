@@ -332,6 +332,16 @@ struct Phaseque : Module {
   };
 
   struct PatternShiftParamQuantity : ParamQuantity {
+    void setSmoothValue(float value) {
+      if (!module) {
+        return;
+      }
+      Phaseque* phaseq = static_cast<Phaseque*>(module);
+      value = math::clampSafe(value, getMinValue(), getMaxValue());
+      phaseq->setPatternShift(value);
+      // APP->engine->setParam(module, paramId, value);
+    }
+
     void setValue(float value) override {
       if (!module)
         return;
