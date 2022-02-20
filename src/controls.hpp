@@ -86,6 +86,15 @@ struct ZZC_DisplayKnob : SvgKnob {
     disp->box.size = fb->box.size;
   }
 
+  void onDragMove(const DragMoveEvent& e) override {
+    SvgKnob::onDragMove(e);
+    engine::ParamQuantity* pq = getParamQuantity();
+    if (pq) {
+      auto val = pq->getSmoothValue();
+      pq->setValue(val);
+    }
+  }
+
   void onDragStart(const DragStartEvent& e) override {
     if (e.button != GLFW_MOUSE_BUTTON_LEFT)
       return;
@@ -206,9 +215,6 @@ struct ZZC_PhasequeAttrKnob : ZZC_DisplayKnob {
 };
 
 struct ZZC_PhasequeXYDisplayWidget : XYDisplayWidget {
-  float oldValueX = 0.0;
-  float oldValueY = 0.0;
-
   ZZC_PhasequeXYDisplayWidget() {
   }
 
@@ -252,6 +258,7 @@ struct ZZC_PhasequeXYDisplayWidget : XYDisplayWidget {
         APP->history->push(h);
       }
     }
+
   }
 };
 

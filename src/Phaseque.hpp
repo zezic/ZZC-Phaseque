@@ -344,8 +344,9 @@ struct Phaseque : Module {
 
   struct PatternMutaParamQuantity : ParamQuantity {
     void setValue(float value) override {
-      if (!module)
+      if (!module) {
         return;
+      }
       float delta = value - getValue();
       Phaseque* phaseq = static_cast<Phaseque*>(module);
       phaseq->mutate(delta);
@@ -361,12 +362,21 @@ struct Phaseque : Module {
     }
 
     void setValue(float value) override {
-      if (!module)
+      if (!module) {
         return;
+      }
       Phaseque* phaseq = static_cast<Phaseque*>(module);
       value = math::clampSafe(value, getMinValue(), getMaxValue());
       phaseq->setStepAttrBase(item, attr, value);
       // APP->engine->setParam(module, paramId, value);
+    }
+
+    float getValue() override {
+      if (!module) {
+        return this->defaultValue;
+      }
+      Phaseque* phaseq = static_cast<Phaseque*>(module);
+      return phaseq->getStepAttrBase(item, attr);
     }
   };
 
@@ -405,11 +415,13 @@ struct Phaseque : Module {
     configParam<PatternResoParamQuantity>(PATTERN_RESO_PARAM, 1.0f, 99.0f, 8.0f, "Pattern Resolution");
     configParam<PatternShiftParamQuantity>(PATTERN_SHIFT_PARAM, -1.0f, 1.0f, 0.0f, "Pattern Shift");
     configParam<PatternMutaParamQuantity>(PATTERN_MUTA_PARAM, -INFINITY, INFINITY, 0.0f, "Pattern Mutation");
+
     ForLoop<NUM_STEPS-1>::iterate<StepParamConfigurator>(this);
     for (int i = 0; i < NUM_PATTERNS; i++) {
       patterns[i].init();
       patterns[i].goTo = eucMod(i + 1, NUM_PATTERNS);
     }
+
     this->patternIdx = 0;
     takeOutCurrentPattern();
     lights[TEMPO_TRACK_LED].value = tempoTrack ? 1.0f : 0.0f;
@@ -467,6 +479,13 @@ struct Phaseque : Module {
     if (this->gridDisplayConsumer) {
       this->gridDisplayConsumer->dirtyMask.set(this->patternIdx, this->pattern.hasCustomSteps());
     }
+  }
+
+  float getStepAttrBase(int stepNumber, int attr) {
+    unsigned int blockIdx = stepNumber / this->pattern.blockSize;
+    unsigned int stepInBlockIdx = stepNumber % this->pattern.blockSize;
+
+    return this->pattern.stepBases[attr][blockIdx][stepInBlockIdx];
   }
 
   void setStepAttrBase(int stepNumber, int attr, float target) {
