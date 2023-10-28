@@ -104,7 +104,6 @@ struct ZZC_DisplayKnob : SvgKnob {
     engine::ParamQuantity* pq = getParamQuantity();
     if (pq) {
       float oldVal = pq->getValue();
-      std::cout << "oldVal: " << oldVal << std::endl;
       this->oldValue = oldVal;
     }
 

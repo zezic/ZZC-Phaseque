@@ -89,6 +89,7 @@ void Phaseque::processGlobalParams() {
 }
 
 void Phaseque::processPatternNav() {
+  if (!this->gridDisplayProducer) { return; }
   if (this->gridDisplayProducer->patternFlashNeg == -1) {
     this->patternFlashNeg = -1;
     this->gridDisplayProducer->patternFlashNeg = 0;
@@ -845,6 +846,7 @@ void Phaseque::processTransport(bool phaseWasZeroed, float sampleTime) {
 }
 
 void Phaseque::feedDisplays() {
+  if (!this->gridDisplayConsumer) { return; }
   if (this->gridDisplayConsumer->consumed) {
     this->gridDisplayConsumer->currentPattern = this->patternIdx;
     this->gridDisplayConsumer->currentPatternGoTo = this->pattern.goTo;
@@ -856,6 +858,7 @@ void Phaseque::feedDisplays() {
     this->gridDisplayConsumer->patternFlashPos = this->patternFlashPos != -1 ? this->patternFlashPos : -1;
   }
 
+  if (!this->mainDisplayConsumer) { return; }
   if (this->mainDisplayConsumer->consumed) {
     this->mainDisplayConsumer->phase = this->phaseShifted;
     this->mainDisplayConsumer->direction = this->direction;

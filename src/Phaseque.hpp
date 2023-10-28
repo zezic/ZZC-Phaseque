@@ -35,7 +35,6 @@ struct StepAttrParamQuantityBase : ParamQuantity {
   int attr;
 };
 
-
 struct Phaseque : Module {
   enum ParamIds {
     PHASE_PARAM,
@@ -427,6 +426,7 @@ struct Phaseque : Module {
     configParam(GLOBAL_LEN_PARAM, 0.0, 2.0, 1.0, "Global Step Length Modifier");
     configParam(SHIFT_LEFT_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Shift Pattern to the Left by 1/8");
     configParam(SHIFT_RIGHT_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Shift Pattern to the Right by 1/8");
+    configParam(QNT_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Quantize Steps Position");
     configParam(LEN_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Quantize Steps Length");
     configParam(REV_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Reverse Pattern");
     configParam(FLIP_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Flip Pattern");
@@ -457,6 +457,8 @@ struct Phaseque : Module {
       patterns[i].randomize();
     }
     takeOutCurrentPattern();
+
+    if (!this->gridDisplayConsumer) { return; }
     this->gridDisplayConsumer->dirtyMask.set();
     this->gridDisplayConsumer->consumed = false;
   }
