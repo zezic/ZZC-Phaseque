@@ -92,7 +92,7 @@ struct ZZC_DisplayKnob : SvgKnob {
     SvgKnob::onDragMove(e);
     engine::ParamQuantity* pq = getParamQuantity();
     if (pq) {
-      auto val = pq->getSmoothValue();
+      auto val = pq->getValue();
       pq->setValue(val);
     }
   }
@@ -171,7 +171,7 @@ struct ZZC_PhasequePatternShiftKnob : ZZC_DisplayKnob {
 
     engine::ParamQuantity* paramQuantity = this->getParamQuantity();
     if (paramQuantity) {
-      float newValue = paramQuantity->getSmoothValue();
+      float newValue = paramQuantity->getValue();
       if (this->oldValue != newValue) {
         PhasequePatternShiftChange *h = new PhasequePatternShiftChange;
         h->moduleId = paramQuantity->module->id;
@@ -227,7 +227,7 @@ struct ZZC_PhasequeAttrKnob : ZZC_DisplayKnob {
 
     engine::ParamQuantity* paramQuantity = this->getParamQuantity();
     if (paramQuantity) {
-      float newValue = paramQuantity->getSmoothValue();
+      float newValue = paramQuantity->getValue();
       if (oldValue != newValue) {
         PhasequeStepAttrChange *h = new PhasequeStepAttrChange;
         h->moduleId = paramQuantity->module->id;
