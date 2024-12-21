@@ -2,10 +2,10 @@
 #include <algorithm> // for std:rotate
 #include <iostream>
 
-#include "GridDisplay.hpp"
-#include "MainDisplay.hpp"
-#include "Pattern.hpp"
 #include "ZZC.hpp"
+#include "Pattern.hpp"
+#include "MainDisplay.hpp"
+#include "GridDisplay.hpp"
 #include "helpers.hpp"
 
 #define MAX_VOICES   16

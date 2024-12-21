@@ -1,6 +1,6 @@
 #pragma once
-#include "Phaseque.hpp"
 #include "ZZC.hpp"
+#include "Phaseque.hpp"
 
 struct PhasequePatternResoChange : history::ModuleAction {
     int          paramId;

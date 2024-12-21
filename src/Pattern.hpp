@@ -2,8 +2,8 @@
 #include <bitset>
 #include <iomanip>
 
-#include "Step.hpp"
 #include "ZZC.hpp"
+#include "Step.hpp"
 // #include "simd/functions.hpp"
 // #include "simd/vector.hpp"
 

@@ -1,6 +1,6 @@
 #pragma once
-#include "Phaseque.hpp"
 #include "ZZC.hpp"
+#include "Phaseque.hpp"
 
 #define NUM_PATTERNS 32
 

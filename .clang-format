@@ -68,7 +68,7 @@ Language: Cpp
 NamespaceIndentation: Inner
 PointerAlignment: Right
 ReflowComments: true
-SortIncludes: true
+SortIncludes: false
 SortUsingDeclarations: true
 SpaceAfterCStyleCast: true
 SpaceAfterLogicalNot: false

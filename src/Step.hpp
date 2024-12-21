@@ -1,6 +1,7 @@
 #pragma once
-#include "Mutations.hpp"
+
 #include "ZZC.hpp"
+#include "Mutations.hpp"
 #include "helpers.hpp"
 
 const int NUM_STEPS = 8;
