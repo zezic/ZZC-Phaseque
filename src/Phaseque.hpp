@@ -78,7 +78,6 @@ struct Phaseque : Module {
     RESET_INPUT,
     GOTO_INPUT,
     PTRN_INPUT,
-    FIRST_INPUT,
     RND_INPUT,
     LEFT_INPUT,
     DOWN_INPUT,
@@ -433,6 +432,54 @@ struct Phaseque : Module {
     configParam<PatternResoParamQuantity>(PATTERN_RESO_PARAM, 1.0f, 99.0f, 8.0f, "Pattern Resolution");
     configParam<PatternShiftParamQuantity>(PATTERN_SHIFT_PARAM, -1.0f, 1.0f, 0.0f, "Pattern Shift");
     configParam<PatternMutaParamQuantity>(PATTERN_MUTA_PARAM, -INFINITY, INFINITY, 0.0f, "Pattern Mutation");
+
+    configInput(CLOCK_INPUT, "Clock");
+    configInput(VBPS_INPUT, "V/OCT → BPM");
+    configInput(PHASE_INPUT, "Phase");
+    configInput(CLUTCH_INPUT, "Clutch Toggle Trigger");
+    configInput(RESET_INPUT, "Reset Trigger");
+    configInput(GOTO_INPUT, "Go to Pattern at V/12P Trigger");
+    configInput(PTRN_INPUT, "Pattern Select, V/12P");
+    configInput(RND_INPUT, "Random Pattern Trigger");
+    configInput(LEFT_INPUT, "Change to Pattern on the Left Trigger");
+    configInput(DOWN_INPUT, "Change to Pattern Below Trigger");
+    configInput(UP_INPUT, "Change to Pattern Above Trigger");
+    configInput(RIGHT_INPUT, "Change to Pattern on the Right Trigger");
+    configInput(SEQ_INPUT, "Advance to Next Pattern (Including Unmodified) Trigger");
+    configInput(PREV_INPUT, "Go to Previous Modified Pattern Trigger");
+    configInput(NEXT_INPUT, "Go to Next Modified Pattern Trigger");
+    configInput(GLOBAL_GATE_INPUT, "Invert Gates Globally Gate");
+    configInput(GLOBAL_SHIFT_INPUT, "Shift CV (±5V)");
+    configInput(GLOBAL_LEN_INPUT, "Length CV (±5V)");
+    configInput(GLOBAL_EXPR_CURVE_INPUT, "Global Expression Curve CV (±5V)");
+    configInput(GLOBAL_EXPR_POWER_INPUT, "Global Expression Power CV (±5V)");
+
+    for (size_t i = 0; i < NUM_STEPS; i++) {
+      configInput(STEP_JUMP_INPUT + i, "Jump to Step " + std::to_string(i + 1) + " Trigger");
+    }
+    
+    configInput(RND_JUMP_INPUT, "Jump to Random Step Trigger");
+    configInput(MUTA_DEC_INPUT, "Mutate Decrement Trigger");
+    configInput(MUTA_INC_INPUT, "Mutate Increment Trigger");
+
+    configOutput(GATE_OUTPUT, "Gate");
+    configOutput(V_OUTPUT, "V");
+    configOutput(SHIFT_OUTPUT, "Shift");
+    configOutput(LEN_OUTPUT, "Len");
+    configOutput(EXPR_OUTPUT, "Expression");
+    configOutput(EXPR_CURVE_OUTPUT, "Expression Curve");
+    configOutput(PHASE_OUTPUT, "Phase");
+    configOutput(WENT_OUTPUT, "Went (Pattern Changed) Trigger");
+    configOutput(PTRN_OUTPUT, "V/12 Active Pattern");
+
+    for (size_t i = 0; i < NUM_STEPS; i++) {
+      configOutput(STEP_GATE_OUTPUT + i, "Step " + std::to_string(i + 1) + " Active Gate");
+    }
+
+    configOutput(PTRN_START_OUTPUT, "Pattern Start Trigger");
+    configOutput(PTRN_PHASE_OUTPUT, "Pattern Phase");
+    configOutput(PTRN_END_OUTPUT, "Pattern End Trigger");
+    configOutput(PTRN_WRAP_OUTPUT, "Pattern Wrap (Current Pattern Restarted) Trigger");
 
     ForLoop<NUM_STEPS-1>::iterate<StepParamConfigurator>(this);
     for (int i = 0; i < NUM_PATTERNS; i++) {
