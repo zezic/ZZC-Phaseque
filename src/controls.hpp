@@ -11,6 +11,9 @@ std::vector<std::string> StepAttrNames = {"value",
                                           "expression power",
                                           "expression out"};
 
+// TODO: This knob is broken. Whenever it's moved, the value keeps getting set back to the current
+// value. Modiying onDragMove() I can get it to seemingly work at random, but it keeps wanting to
+// set the value back to the current value (oldValue?). I'm not sure what's going on here.
 struct ZZC_PhasequePatternResoKnob : SvgKnob {
     float oldValue = 0.0;
 
@@ -29,18 +32,26 @@ struct ZZC_PhasequePatternResoKnob : SvgKnob {
 
     void onDragMove(const DragMoveEvent& e) override
     {
+        if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+            return;
+
         SvgKnob::onDragMove(e);
+
         engine::ParamQuantity* pq = getParamQuantity();
         if (pq) {
-            auto val = pq->getValue();
-            pq->setValue(val);
+            float newValue = pq->getValue();
+            if (newValue != this->oldValue) {
+                pq->setValue(newValue);
+                this->oldValue = newValue;
+            }
         }
     }
 
     void onDragStart(const DragStartEvent& e) override
     {
-        if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+        if (e.button != GLFW_MOUSE_BUTTON_LEFT) {
             return;
+        }
 
         engine::ParamQuantity* pq = getParamQuantity();
         if (pq) {
@@ -57,6 +68,8 @@ struct ZZC_PhasequePatternResoKnob : SvgKnob {
 
         APP->window->cursorUnlock();
 
+        SvgKnob::onDragEnd(e);
+
         engine::ParamQuantity* paramQuantity = this->getParamQuantity();
         if (paramQuantity) {
             float newValue = paramQuantity->getValue();
@@ -72,6 +85,19 @@ struct ZZC_PhasequePatternResoKnob : SvgKnob {
                 APP->history->push(h);
             }
         }
+    }
+
+    void step() override
+    {
+        engine::ParamQuantity* pq = getParamQuantity();
+
+        if (pq) {
+            if (pq->getValue() != this->oldValue) {
+                this->fb->setDirty();
+            }
+        }
+
+        SvgKnob::step();
     }
 };
 
@@ -106,13 +132,13 @@ struct ZZC_DisplayKnob : SvgKnob {
 
     void onDragStart(const DragStartEvent& e) override
     {
-        if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+        if (e.button != GLFW_MOUSE_BUTTON_LEFT) {
             return;
+        }
 
         engine::ParamQuantity* pq = getParamQuantity();
         if (pq) {
-            float oldVal   = pq->getValue();
-            this->oldValue = oldVal;
+            this->oldValue = pq->getValue();
         }
 
         SvgKnob::onDragStart(e);
@@ -163,6 +189,14 @@ struct ZZC_DisplayKnob : SvgKnob {
         disp->value = this->valueToDraw;
         SvgKnob::draw(args);
         this->lastDrawnValue = this->valueToDraw;
+    }
+
+    void onDoubleClick(const event::DoubleClick& e) override
+    {
+        engine::ParamQuantity* paramQuantity = this->getParamQuantity();
+        if (paramQuantity) {
+            paramQuantity->setValue(paramQuantity->defaultValue);
+        }
     }
 };
 
@@ -233,6 +267,12 @@ struct ZZC_PhasequeMutaKnob : SvgKnob {
         if (e.button != GLFW_MOUSE_BUTTON_LEFT)
             return;
         APP->window->cursorUnlock();
+    }
+
+    void onDoubleClick(const event::DoubleClick& e) override
+    {
+        Phaseque* phaseq = static_cast<Phaseque*>(module);
+        phaseq->resetMutation();
     }
 };
 
@@ -313,6 +353,17 @@ struct ZZC_PhasequeXYDisplayWidget : XYDisplayWidget {
                 h->attr = q->attr;
                 APP->history->push(h);
             }
+        }
+    }
+
+    void onDoubleClick(const event::DoubleClick& e) override
+    {
+        if (this->paramQuantityX) {
+            this->paramQuantityX->setValue(this->paramQuantityX->defaultValue);
+        }
+
+        if (this->paramQuantityY) {
+            this->paramQuantityY->setValue(this->paramQuantityY->defaultValue);
         }
     }
 };

@@ -412,9 +412,11 @@ struct MainDisplayWidget : BaseDisplayWidget {
         nvgGlobalCompositeOperation(args.vg, NVG_SOURCE_OVER);
     }
 
-    void draw(const DrawArgs &args) override
+    void drawLayer(const DrawArgs &args, int layer) override
     {
-        drawBackground(args);
+        if (layer != 1) {
+            drawBackground(args);
+        }
 
         for (int i = 1; i < NUM_STEPS; i++) {
             drawDash(args, Vec(padding + i * stepX, padding + dashLine1));
