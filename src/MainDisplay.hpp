@@ -51,8 +51,7 @@ struct MainDisplayWidget : BaseDisplayWidget {
     bool ready = false;
 
     MainDisplayWidget() {
-        font = APP->window->loadFont(
-            asset::plugin(pluginInstance, "res/fonts/Nunito/Nunito-Black.ttf"));
+        font = APP->window->loadFont(asset::plugin(pluginInstance, "res/fonts/Nunito/Nunito-Black.ttf"));
         consumer = std::make_shared<MainDisplayConsumer>();
     }
 
@@ -96,8 +95,7 @@ struct MainDisplayWidget : BaseDisplayWidget {
         float periodSize = area.x / resolutionVal;
 
         for (float i = 0.0f; i < resolutionVal; i = i + 1.0f) {
-            if (phaseVal * resolutionVal >= i
-                && phaseVal * resolutionVal < i + 1) {
+            if (phaseVal * resolutionVal >= i && phaseVal * resolutionVal < i + 1) {
                 nvgStrokeColor(args.vg, lcdActiveColor);
             } else {
                 nvgStrokeColor(args.vg, lcdDisabledColor);
@@ -110,30 +108,20 @@ struct MainDisplayWidget : BaseDisplayWidget {
         }
     }
 
-    void drawExprCurve(
-        const DrawArgs& args,
-        float x1,
-        float workArea,
-        unsigned int stepIdx,
-        bool mutated) {
+    void drawExprCurve(const DrawArgs& args, float x1, float workArea, unsigned int stepIdx, bool mutated) {
         unsigned int blockIdx = stepIdx / this->consumer->pattern.blockSize;
-        unsigned int stepInBlockIdx =
-            stepIdx % this->consumer->pattern.blockSize;
+        unsigned int stepInBlockIdx = stepIdx % this->consumer->pattern.blockSize;
 
         if (mutated) {
             float mutationStrength = 0.f;
-            mutationStrength += std::abs(
-                this->consumer->pattern
-                    .stepMutas[StepAttr::STEP_EXPR_IN][blockIdx][stepInBlockIdx]);
-            mutationStrength += std::abs(
-                this->consumer->pattern.stepMutas[StepAttr::STEP_EXPR_OUT]
-                                                 [blockIdx][stepInBlockIdx]);
-            mutationStrength += std::abs(
-                this->consumer->pattern.stepMutas[StepAttr::STEP_EXPR_POWER]
-                                                 [blockIdx][stepInBlockIdx]);
-            mutationStrength += std::abs(
-                this->consumer->pattern.stepMutas[StepAttr::STEP_EXPR_CURVE]
-                                                 [blockIdx][stepInBlockIdx]);
+            mutationStrength +=
+                std::abs(this->consumer->pattern.stepMutas[StepAttr::STEP_EXPR_IN][blockIdx][stepInBlockIdx]);
+            mutationStrength +=
+                std::abs(this->consumer->pattern.stepMutas[StepAttr::STEP_EXPR_OUT][blockIdx][stepInBlockIdx]);
+            mutationStrength +=
+                std::abs(this->consumer->pattern.stepMutas[StepAttr::STEP_EXPR_POWER][blockIdx][stepInBlockIdx]);
+            mutationStrength +=
+                std::abs(this->consumer->pattern.stepMutas[StepAttr::STEP_EXPR_CURVE][blockIdx][stepInBlockIdx]);
             nvgGlobalAlpha(args.vg, std::min(mutationStrength * 0.5f, 1.f));
         }
 
@@ -153,18 +141,15 @@ struct MainDisplayWidget : BaseDisplayWidget {
             float cx = x1 + len * phase;
             float expressions[4];
 
-            getBlockExpressions(
-                (mutated ? this->consumer->pattern.stepBasesMutated
-                         : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_IN][blockIdx],
-                (mutated ? this->consumer->pattern.stepBasesMutated
-                         : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_OUT][blockIdx],
-                (mutated ? this->consumer->pattern.stepBasesMutated
-                         : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_POWER][blockIdx],
-                (mutated ? this->consumer->pattern.stepBasesMutated
-                         : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_CURVE][blockIdx],
-                simd::float_4(phase),
-                this->consumer->globalPower,
-                this->consumer->globalCurve)
+            getBlockExpressions((mutated ? this->consumer->pattern.stepBasesMutated
+                                         : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_IN][blockIdx],
+                                (mutated ? this->consumer->pattern.stepBasesMutated
+                                         : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_OUT][blockIdx],
+                                (mutated ? this->consumer->pattern.stepBasesMutated
+                                         : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_POWER][blockIdx],
+                                (mutated ? this->consumer->pattern.stepBasesMutated
+                                         : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_CURVE][blockIdx],
+                                simd::float_4(phase), this->consumer->globalPower, this->consumer->globalCurve)
                 .store(expressions);
 
             float cy = expressions[stepInBlockIdx];
@@ -178,28 +163,21 @@ struct MainDisplayWidget : BaseDisplayWidget {
             float prevCx = x1 + len * prevPhase;
             float prevExpressions[4];
 
-            getBlockExpressions(
-                (mutated ? this->consumer->pattern.stepBasesMutated
-                         : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_IN][blockIdx],
-                (mutated ? this->consumer->pattern.stepBasesMutated
-                         : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_OUT][blockIdx],
-                (mutated ? this->consumer->pattern.stepBasesMutated
-                         : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_POWER][blockIdx],
-                (mutated ? this->consumer->pattern.stepBasesMutated
-                         : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_CURVE][blockIdx],
-                simd::float_4(prevPhase),
-                this->consumer->globalPower,
-                this->consumer->globalCurve)
+            getBlockExpressions((mutated ? this->consumer->pattern.stepBasesMutated
+                                         : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_IN][blockIdx],
+                                (mutated ? this->consumer->pattern.stepBasesMutated
+                                         : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_OUT][blockIdx],
+                                (mutated ? this->consumer->pattern.stepBasesMutated
+                                         : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_POWER][blockIdx],
+                                (mutated ? this->consumer->pattern.stepBasesMutated
+                                         : this->consumer->pattern.stepBases)[StepAttr::STEP_EXPR_CURVE][blockIdx],
+                                simd::float_4(prevPhase), this->consumer->globalPower, this->consumer->globalCurve)
                 .store(prevExpressions);
 
             float prevCy = prevExpressions[stepInBlockIdx];
 
-            nvgQuadTo(
-                args.vg,
-                prevCx,
-                exprHorizont + 6 + stepY * prevCy * -0.5,
-                cx,
-                exprHorizont + 6 + stepY * cy * -0.5);
+            nvgQuadTo(args.vg, prevCx, exprHorizont + 6 + stepY * prevCy * -0.5, cx,
+                      exprHorizont + 6 + stepY * cy * -0.5);
         }
 
         nvgStroke(args.vg);
@@ -207,20 +185,16 @@ struct MainDisplayWidget : BaseDisplayWidget {
 
     void drawStep(const DrawArgs& args, unsigned int stepIdx, bool mutated) {
         unsigned int blockIdx = stepIdx / this->consumer->pattern.blockSize;
-        unsigned int stepInBlockIdx =
-            stepIdx % this->consumer->pattern.blockSize;
+        unsigned int stepInBlockIdx = stepIdx % this->consumer->pattern.blockSize;
 
         if (mutated) {
             float mutationStrength = 0.f;
-            mutationStrength += std::abs(
-                this->consumer->pattern
-                    .stepMutas[StepAttr::STEP_VALUE][blockIdx][stepInBlockIdx]);
-            mutationStrength += std::abs(
-                this->consumer->pattern
-                    .stepMutas[StepAttr::STEP_LEN][blockIdx][stepInBlockIdx]);
-            mutationStrength += std::abs(
-                this->consumer->pattern
-                    .stepMutas[StepAttr::STEP_SHIFT][blockIdx][stepInBlockIdx]);
+            mutationStrength +=
+                std::abs(this->consumer->pattern.stepMutas[StepAttr::STEP_VALUE][blockIdx][stepInBlockIdx]);
+            mutationStrength +=
+                std::abs(this->consumer->pattern.stepMutas[StepAttr::STEP_LEN][blockIdx][stepInBlockIdx]);
+            mutationStrength +=
+                std::abs(this->consumer->pattern.stepMutas[StepAttr::STEP_SHIFT][blockIdx][stepInBlockIdx]);
             nvgGlobalAlpha(args.vg, std::min(mutationStrength * 3.f, 1.f));
         } else {
             nvgGlobalAlpha(args.vg, 1.f);
@@ -269,22 +243,13 @@ struct MainDisplayWidget : BaseDisplayWidget {
 
         // Circle
         nvgBeginPath(args.vg);
-        nvgCircle(
-            args.vg,
-            dir == 1 ? x1 + 2 : fastmod(x2 - 2 - padding, area.x) + padding,
-            y,
-            radius);
+        nvgCircle(args.vg, dir == 1 ? x1 + 2 : fastmod(x2 - 2 - padding, area.x) + padding, y, radius);
         nvgFill(args.vg);
 
         // Expression curve
         this->drawExprCurve(args, x1, workArea, stepIdx, mutated);
         if (x2 < x1) {
-            this->drawExprCurve(
-                args,
-                x1 - workArea - 1,
-                workArea,
-                stepIdx,
-                mutated);
+            this->drawExprCurve(args, x1 - workArea - 1, workArea, stepIdx, mutated);
         }
     }
 
@@ -293,29 +258,21 @@ struct MainDisplayWidget : BaseDisplayWidget {
         nvgScissor(args.vg, padding - 1, padding - 1, area.x + 2, area.y + 2);
         nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
 
-        for (unsigned int stepIdx = 0; stepIdx < this->consumer->pattern.size;
-             stepIdx++) {
+        for (unsigned int stepIdx = 0; stepIdx < this->consumer->pattern.size; stepIdx++) {
             unsigned int blockIdx = stepIdx / 4;
             unsigned int stepInBlockIdx = stepIdx % 4;
 
-            bool gate =
-                bool(
-                    simd::movemask(this->consumer->pattern.stepGates[blockIdx])
-                    & (1 << stepInBlockIdx))
-                ^ !this->consumer->globalGate;
+            bool gate = bool(simd::movemask(this->consumer->pattern.stepGates[blockIdx]) & (1 << stepInBlockIdx))
+                        ^ !this->consumer->globalGate;
 
             bool active = false;
 
             if (this->consumer->polyphonyMode == PolyphonyModes::MONOPHONIC) {
-                active = this->consumer->pattern.hasActiveStep
-                         && (this->consumer->pattern.activeStepIdx == stepIdx);
+                active = this->consumer->pattern.hasActiveStep && (this->consumer->pattern.activeStepIdx == stepIdx);
             } else if (this->consumer->polyphonyMode == PolyphonyModes::POLYPHONIC) {
-                active = simd::movemask(this->consumer->pattern.hits[blockIdx])
-                         & 1 << stepInBlockIdx;
+                active = simd::movemask(this->consumer->pattern.hits[blockIdx]) & 1 << stepInBlockIdx;
             } else if (this->consumer->polyphonyMode == PolyphonyModes::UNISON) {
-                active =
-                    simd::movemask(this->consumer->pattern.hitsClean[blockIdx])
-                    & 1 << stepInBlockIdx;
+                active = simd::movemask(this->consumer->pattern.hitsClean[blockIdx]) & 1 << stepInBlockIdx;
             }
 
             if (active) {
@@ -332,8 +289,7 @@ struct MainDisplayWidget : BaseDisplayWidget {
             this->drawStep(args, stepIdx, false);
 
             if (this->consumer->polyphonyMode == PolyphonyModes::UNISON) {
-                active = simd::movemask(this->consumer->pattern.hits[blockIdx])
-                         & 1 << stepInBlockIdx;
+                active = simd::movemask(this->consumer->pattern.hits[blockIdx]) & 1 << stepInBlockIdx;
             }
 
             if (active) {
@@ -363,8 +319,9 @@ struct MainDisplayWidget : BaseDisplayWidget {
         //       if (step->mutationStrength != 0.f) {
         //         nvgStrokeColor(args.vg, lcdDisabledMutColor);
         //         nvgFillColor(args.vg, lcdDisabledMutColor);
-        //         nvgGlobalAlpha(args.vg, std::min(step->mutationStrength, 1.f));
-        //         drawStep(args, step, true);
+        //         nvgGlobalAlpha(args.vg,
+        //         std::min(step->mutationStrength, 1.f)); drawStep(args, step,
+        //         true);
         //       }
         //     }
         //     if (step->gate ^ !globalGate) {
@@ -375,8 +332,9 @@ struct MainDisplayWidget : BaseDisplayWidget {
         //       if (step->mutationStrength != 0.f) {
         //         nvgStrokeColor(args.vg, lcdDimmedMutColor);
         //         nvgFillColor(args.vg, lcdDimmedMutColor);
-        //         nvgGlobalAlpha(args.vg, std::min(step->mutationStrength, 1.f));
-        //         drawStep(args, step, true);
+        //         nvgGlobalAlpha(args.vg,
+        //         std::min(step->mutationStrength, 1.f)); drawStep(args, step,
+        //         true);
         //       }
         //     }
         //     nvgStrokeColor(args.vg, lcdActiveColor);
@@ -389,8 +347,8 @@ struct MainDisplayWidget : BaseDisplayWidget {
         //           nvgStrokeColor(args.vg, lcdActiveMutColor);
         //           nvgFillColor(args.vg, lcdActiveMutColor);
         //           nvgGlobalAlpha(args.vg,
-        //           std::min(step->mutationStrength, 1.f)); drawStep(args, step,
-        //           true);
+        //           std::min(step->mutationStrength, 1.f)); drawStep(args,
+        //           step, true);
         //         }
         //       }
         //     } else if (polyphonyMode == PolyphonyModes::UNISON) {
@@ -402,8 +360,8 @@ struct MainDisplayWidget : BaseDisplayWidget {
         //           nvgStrokeColor(args.vg, lcdActiveMutColor);
         //           nvgFillColor(args.vg, lcdActiveMutColor);
         //           nvgGlobalAlpha(args.vg,
-        //           std::min(step->mutationStrength, 1.f)); drawStep(args, step,
-        //           true);
+        //           std::min(step->mutationStrength, 1.f)); drawStep(args,
+        //           step, true);
         //         }
         //       }
         //     }

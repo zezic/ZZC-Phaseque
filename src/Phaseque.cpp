@@ -40,13 +40,10 @@ void Phaseque::jumpToStep(int stepIdx) {
 
     if (this->polyphonyMode == PolyphonyModes::UNISON) {
         targetPhase =
-            (direction == 1
-                 ? this->pattern.stepInsComputed
-                 : this->pattern.stepOutsComputed)[blockIdx][stepInBlockIdx];
+            (direction == 1 ? this->pattern.stepInsComputed : this->pattern.stepOutsComputed)[blockIdx][stepInBlockIdx];
     } else {
-        targetPhase =
-            (direction == 1 ? this->pattern.stepMutaInsComputed
-                            : this->pattern.stepMutaOutsComputed)[blockIdx][stepInBlockIdx];
+        targetPhase = (direction == 1 ? this->pattern.stepMutaInsComputed
+                                      : this->pattern.stepMutaOutsComputed)[blockIdx][stepInBlockIdx];
     }
 
     this->phase = eucMod(targetPhase - this->phaseParam, 1.f);
@@ -56,8 +53,7 @@ void Phaseque::jumpToStep(int stepIdx) {
 void Phaseque::processGlobalParams() {
     // Gates
     if (inputs[GLOBAL_GATE_INPUT].isConnected()) {
-        globalGate = globalGateInternal
-                     ^ (inputs[GLOBAL_GATE_INPUT].getVoltage() > 1.0f);
+        globalGate = globalGateInternal ^ (inputs[GLOBAL_GATE_INPUT].getVoltage() > 1.0f);
     } else {
         globalGate = globalGateInternal;
     }
@@ -65,11 +61,9 @@ void Phaseque::processGlobalParams() {
     // Shift
     float newGlobalShift;
     if (inputs[GLOBAL_SHIFT_INPUT].isConnected()) {
-        newGlobalShift = params[GLOBAL_SHIFT_PARAM].getValue()
-                         + clamp(inputs[GLOBAL_SHIFT_INPUT].getVoltage() * 0.2f
-                                     * baseStepLen,
-                                 -baseStepLen,
-                                 baseStepLen);
+        newGlobalShift =
+            params[GLOBAL_SHIFT_PARAM].getValue()
+            + clamp(inputs[GLOBAL_SHIFT_INPUT].getVoltage() * 0.2f * baseStepLen, -baseStepLen, baseStepLen);
     } else {
         newGlobalShift = params[GLOBAL_SHIFT_PARAM].getValue();
     }
@@ -84,9 +78,7 @@ void Phaseque::processGlobalParams() {
 
     if (inputs[GLOBAL_LEN_INPUT].isConnected()) {
         newGlobalLen = params[GLOBAL_LEN_PARAM].getValue()
-                       * (clamp(inputs[GLOBAL_LEN_INPUT].getVoltage(), -4.999f, 4.999f)
-                              * 0.2f
-                          + 1.0f);
+                       * (clamp(inputs[GLOBAL_LEN_INPUT].getVoltage(), -4.999f, 4.999f) * 0.2f + 1.0f);
     } else {
         newGlobalLen = params[GLOBAL_LEN_PARAM].getValue();
     }
@@ -139,8 +131,7 @@ void Phaseque::processPatternNav() {
         return;
     }
 
-    if (inputs[SEQ_INPUT].isConnected()
-        && seqInputTrigger.process(inputs[SEQ_INPUT].getVoltage())) {
+    if (inputs[SEQ_INPUT].isConnected() && seqInputTrigger.process(inputs[SEQ_INPUT].getVoltage())) {
         if (patternIdx != pattern.goTo) {
             goToPattern(pattern.goTo);
             return;
@@ -150,11 +141,8 @@ void Phaseque::processPatternNav() {
     if (inputs[GOTO_INPUT].isConnected()) {
         bool ptrnInputIsConnected = inputs[PTRN_INPUT].isConnected();
 
-        unsigned int target = ptrnInputIsConnected
-                                  ? eucMod(
-                                      (int) std::floor(inputs[PTRN_INPUT].getVoltage() * 12.f),
-                                      NUM_PATTERNS)
-                                  : 0;
+        unsigned int target =
+            ptrnInputIsConnected ? eucMod((int) std::floor(inputs[PTRN_INPUT].getVoltage() * 12.f), NUM_PATTERNS) : 0;
 
         if (goToInputTrigger.process(inputs[GOTO_INPUT].getVoltage())) {
             if (ptrnInputIsConnected) {
@@ -175,8 +163,7 @@ void Phaseque::processPatternNav() {
         }
     }
 
-    if (inputs[PREV_INPUT].isConnected()
-        && prevPtrnInputTrigger.process(inputs[PREV_INPUT].getVoltage())) {
+    if (inputs[PREV_INPUT].isConnected() && prevPtrnInputTrigger.process(inputs[PREV_INPUT].getVoltage())) {
         for (int i = this->patternIdx - 1; i >= 0; i--) {
             if (patterns[i].hasCustomSteps()) {
                 goToPattern(i);
@@ -192,8 +179,7 @@ void Phaseque::processPatternNav() {
         }
     }
 
-    if (inputs[NEXT_INPUT].isConnected()
-        && nextPtrnInputTrigger.process(inputs[NEXT_INPUT].getVoltage())) {
+    if (inputs[NEXT_INPUT].isConnected() && nextPtrnInputTrigger.process(inputs[NEXT_INPUT].getVoltage())) {
         for (unsigned int i = this->patternIdx + 1; i < NUM_PATTERNS; i++) {
             if (patterns[i].hasCustomSteps()) {
                 goToPattern(i);
@@ -209,8 +195,7 @@ void Phaseque::processPatternNav() {
         }
     }
 
-    if (inputs[RND_INPUT].isConnected()
-        && firstInputTrigger.process(inputs[RND_INPUT].getVoltage())) {
+    if (inputs[RND_INPUT].isConnected() && firstInputTrigger.process(inputs[RND_INPUT].getVoltage())) {
         unsigned int nonEmpty[NUM_PATTERNS];
         unsigned int idx = 0;
 
@@ -222,15 +207,13 @@ void Phaseque::processPatternNav() {
         }
 
         if (idx != 0) {
-            unsigned int randIdx =
-                clamp((unsigned int) (random::uniform() * idx), 0, idx);
+            unsigned int randIdx = clamp((unsigned int) (random::uniform() * idx), 0, idx);
             goToPattern(nonEmpty[randIdx]);
             return;
         }
     }
 
-    if (inputs[LEFT_INPUT].isConnected()
-        && leftInputTrigger.process(inputs[LEFT_INPUT].getVoltage())) {
+    if (inputs[LEFT_INPUT].isConnected() && leftInputTrigger.process(inputs[LEFT_INPUT].getVoltage())) {
         Limits limits = getRowLimits(this->patternIdx);
 
         for (int i = ((int) patternIdx) - 1; i >= (int) limits.low; i--) {
@@ -248,8 +231,7 @@ void Phaseque::processPatternNav() {
         }
     }
 
-    if (inputs[RIGHT_INPUT].isConnected()
-        && rightInputTrigger.process(inputs[RIGHT_INPUT].getVoltage())) {
+    if (inputs[RIGHT_INPUT].isConnected() && rightInputTrigger.process(inputs[RIGHT_INPUT].getVoltage())) {
         Limits limits = getRowLimits(this->patternIdx);
 
         for (unsigned int i = patternIdx + 1; i < limits.high; i++) {
@@ -267,8 +249,7 @@ void Phaseque::processPatternNav() {
         }
     }
 
-    if (inputs[DOWN_INPUT].isConnected()
-        && downInputTrigger.process(inputs[DOWN_INPUT].getVoltage())) {
+    if (inputs[DOWN_INPUT].isConnected() && downInputTrigger.process(inputs[DOWN_INPUT].getVoltage())) {
         Limits limits = getColumnLimits(patternIdx);
 
         for (int i = patternIdx - 4; i >= (int) limits.low; i -= 4) {
@@ -286,8 +267,7 @@ void Phaseque::processPatternNav() {
         }
     }
 
-    if (inputs[UP_INPUT].isConnected()
-        && upInputTrigger.process(inputs[UP_INPUT].getVoltage())) {
+    if (inputs[UP_INPUT].isConnected() && upInputTrigger.process(inputs[UP_INPUT].getVoltage())) {
         Limits limits = getColumnLimits(patternIdx);
 
         for (int i = patternIdx + 4; i <= (int) limits.high; i += 4) {
@@ -311,8 +291,7 @@ void Phaseque::processButtons() {
         this->wait ^= true;
     }
 
-    if (tempoTrackButtonTrigger.process(
-            params[TEMPO_TRACK_SWITCH_PARAM].getValue())) {
+    if (tempoTrackButtonTrigger.process(params[TEMPO_TRACK_SWITCH_PARAM].getValue())) {
         this->tempoTrack ^= true;
         lights[TEMPO_TRACK_LED].value = tempoTrack ? 1.0f : 0.0f;
     }
@@ -323,8 +302,7 @@ void Phaseque::processButtons() {
     }
 
     for (unsigned int stepIdx = 0; stepIdx < this->pattern.size; stepIdx++) {
-        if (gateButtonsTriggers[stepIdx].process(
-                params[GATE_SWITCH_PARAM + stepIdx].getValue())) {
+        if (gateButtonsTriggers[stepIdx].process(params[GATE_SWITCH_PARAM + stepIdx].getValue())) {
             unsigned int blockIdx = stepIdx / 4;
             unsigned int stepInBlockIdx = stepIdx % 4;
             int intMask = 1 << stepInBlockIdx;
@@ -333,26 +311,21 @@ void Phaseque::processButtons() {
         }
     }
 
-    if (globalGateButtonTrigger.process(
-            params[GLOBAL_GATE_SWITCH_PARAM].getValue())) {
+    if (globalGateButtonTrigger.process(params[GLOBAL_GATE_SWITCH_PARAM].getValue())) {
         this->globalGateInternal ^= true;
     }
 
-    this->useCompatibleBPMCV =
-        params[USE_COMPATIBLE_BPM_CV_PARAM].getValue() == 1.f;
+    this->useCompatibleBPMCV = params[USE_COMPATIBLE_BPM_CV_PARAM].getValue() == 1.f;
 }
 
 void Phaseque::processClutchAndReset() {
     if (clutchButtonTrigger.process(params[CLUTCH_SWITCH_PARAM].getValue())
-        || (inputs[CLUTCH_INPUT].isConnected()
-            && clutchInputTrigger.process(inputs[CLUTCH_INPUT].getVoltage()))) {
+        || (inputs[CLUTCH_INPUT].isConnected() && clutchInputTrigger.process(inputs[CLUTCH_INPUT].getVoltage()))) {
         clutch ^= true;
     }
 
-    resetPulse =
-        resetButtonTrigger.process(params[RESET_SWITCH_PARAM].getValue())
-        || (inputs[RESET_INPUT].isConnected()
-            && resetInputTrigger.process(inputs[RESET_INPUT].getVoltage()));
+    resetPulse = resetButtonTrigger.process(params[RESET_SWITCH_PARAM].getValue())
+                 || (inputs[RESET_INPUT].isConnected() && resetInputTrigger.process(inputs[RESET_INPUT].getVoltage()));
     if (resetPulse) {
         samplesSinceLastReset = 0;
         tempoTracker.reset();
@@ -372,21 +345,15 @@ void Phaseque::processMutaInputs() {
     if (inputs[MUTA_DEC_INPUT].isConnected()) {
         int mutaDecChannels = inputs[MUTA_DEC_INPUT].getChannels();
         if (mutaDecChannels > 1) {
-            for (unsigned int blockIdx = 0;
-                 blockIdx < this->pattern.size / BLOCK_SIZE;
-                 blockIdx++) {
+            for (unsigned int blockIdx = 0; blockIdx < this->pattern.size / BLOCK_SIZE; blockIdx++) {
                 simd::float_4 voltage =
-                    inputs[MUTA_DEC_INPUT].getNormalVoltageSimd<simd::float_4>(
-                        0.f,
-                        blockIdx * BLOCK_SIZE);
-                simd::float_4 resetMask =
-                    mutDecTriggers[blockIdx].process(-voltage);
+                    inputs[MUTA_DEC_INPUT].getNormalVoltageSimd<simd::float_4>(0.f, blockIdx * BLOCK_SIZE);
+                simd::float_4 resetMask = mutDecTriggers[blockIdx].process(-voltage);
                 int resetMaskInt = simd::movemask(resetMask);
                 if (resetMaskInt) {
                     this->resetStepsMutation(blockIdx, resetMask);
                 }
-                simd::float_4 mutateMask =
-                    mutRstTriggers[blockIdx].process(voltage);
+                simd::float_4 mutateMask = mutRstTriggers[blockIdx].process(voltage);
                 int mutateMaskInt = simd::movemask(mutateMask);
                 if (mutateMaskInt) {
                     this->mutateStep(blockIdx, mutateMask, -0.05f);
@@ -405,16 +372,11 @@ void Phaseque::processMutaInputs() {
     if (inputs[MUTA_INC_INPUT].isConnected()) {
         int mutaIncChannels = inputs[MUTA_INC_INPUT].getChannels();
         if (mutaIncChannels > 1) {
-            for (unsigned int blockIdx = 0;
-                 blockIdx < this->pattern.size / BLOCK_SIZE;
-                 blockIdx++) {
+            for (unsigned int blockIdx = 0; blockIdx < this->pattern.size / BLOCK_SIZE; blockIdx++) {
                 simd::float_4 voltage =
-                    inputs[MUTA_INC_INPUT].getNormalVoltageSimd<simd::float_4>(
-                        0.f,
-                        blockIdx * BLOCK_SIZE);
+                    inputs[MUTA_INC_INPUT].getNormalVoltageSimd<simd::float_4>(0.f, blockIdx * BLOCK_SIZE);
 
-                simd::float_4 mutateMask =
-                    mutIncTriggers[blockIdx].process(voltage);
+                simd::float_4 mutateMask = mutIncTriggers[blockIdx].process(voltage);
                 int mutateMaskInt = simd::movemask(mutateMask);
 
                 if (mutateMaskInt) {
@@ -482,16 +444,14 @@ void Phaseque::processJumpInputs() {
 
     for (int i = 0; i < NUM_STEPS; i++) {
         if (inputs[STEP_JUMP_INPUT + i].isConnected()
-            && jumpInputsTriggers[i].process(
-                inputs[STEP_JUMP_INPUT + i].getVoltage())) {
+            && jumpInputsTriggers[i].process(inputs[STEP_JUMP_INPUT + i].getVoltage())) {
             jumpToStep(i);
             retrigGapGenerator.trigger(1e-4f);
             return;
         }
     }
 
-    if (inputs[RND_JUMP_INPUT].isConnected()
-        && rndJumpInputTrigger.process(inputs[RND_JUMP_INPUT].getVoltage())) {
+    if (inputs[RND_JUMP_INPUT].isConnected() && rndJumpInputTrigger.process(inputs[RND_JUMP_INPUT].getVoltage())) {
         std::vector<unsigned int> nonMuted;
         for (unsigned int i = 0; i < NUM_STEPS; i++) {
             unsigned int blockIdx = i / 4;
@@ -520,31 +480,19 @@ void Phaseque::processIndicators() {
 
         if (this->polyphonyMode == PolyphonyModes::MONOPHONIC) {
             lights[STEP_GATE_LIGHT + stepIdx].setBrightness(
-                this->pattern.hasActiveStep
-                        && (this->pattern.activeStepIdx == stepIdx)
-                    ? 1.f
-                    : 0.f);
+                this->pattern.hasActiveStep && (this->pattern.activeStepIdx == stepIdx) ? 1.f : 0.f);
         } else if (this->polyphonyMode == PolyphonyModes::POLYPHONIC) {
             lights[STEP_GATE_LIGHT + stepIdx].setBrightness(
-                simd::movemask(this->pattern.hits[blockIdx])
-                        & 1 << stepInBlockIdx
-                    ? 1.f
-                    : 0.f);
+                simd::movemask(this->pattern.hits[blockIdx]) & 1 << stepInBlockIdx ? 1.f : 0.f);
         } else if (this->polyphonyMode == PolyphonyModes::UNISON) {
             lights[STEP_GATE_LIGHT + stepIdx].setBrightness(
-                simd::movemask(
-                    this->pattern.hits[blockIdx]
-                    | this->pattern.hitsClean[blockIdx])
-                        & 1 << stepInBlockIdx
+                simd::movemask(this->pattern.hits[blockIdx] | this->pattern.hitsClean[blockIdx]) & 1 << stepInBlockIdx
                     ? 1.f
                     : 0.f);
         }
 
         lights[GATE_SWITCH_LED + stepIdx].setBrightness(
-            bool(
-                simd::movemask(this->pattern.stepGates[blockIdx])
-                & (1 << stepInBlockIdx))
-            ^ !globalGate);
+            bool(simd::movemask(this->pattern.stepGates[blockIdx]) & (1 << stepInBlockIdx)) ^ !globalGate);
     }
 
     if (this->wait) {
@@ -555,12 +503,10 @@ void Phaseque::processIndicators() {
 
     lights[PHASE_LED].setBrightness(inputs[PHASE_INPUT].isConnected());
     lights[CLOCK_LED].setBrightness(inputs[CLOCK_INPUT].isConnected());
-    lights[VBPS_LED].setBrightness(
-        inputs[VBPS_INPUT].isConnected() && !inputs[PHASE_INPUT].isConnected());
+    lights[VBPS_LED].setBrightness(inputs[VBPS_INPUT].isConnected() && !inputs[PHASE_INPUT].isConnected());
 
     lights[GLOBAL_GATE_LED].setBrightness(globalGate);
-    lights[GATE_LIGHT].setBrightness(
-        outputs[GATE_OUTPUT].getVoltageSum() / 10.f);
+    lights[GATE_LIGHT].setBrightness(outputs[GATE_OUTPUT].getVoltageSum() / 10.f);
 
     float v = outputs[V_OUTPUT].getVoltageSum();
     lights[V_POS_LIGHT].setBrightness(std::max(v * 0.5f, 0.0f));
@@ -597,14 +543,8 @@ simd::float_4 interPow(simd::float_4 a, simd::float_4 b) {
     return simd::crossfade(frst, scnd, crfd);
 }
 
-simd::float_4 getBlockExpressions(
-    simd::float_4 exprIn,
-    simd::float_4 exprOut,
-    simd::float_4 exprPower,
-    simd::float_4 exprCurve,
-    simd::float_4 phase,
-    float globalPower,
-    float globalCurve) {
+simd::float_4 getBlockExpressions(simd::float_4 exprIn, simd::float_4 exprOut, simd::float_4 exprPower,
+                                  simd::float_4 exprCurve, simd::float_4 phase, float globalPower, float globalCurve) {
     if (globalPower != 0.f) {
         exprPower = simd::clamp(exprPower + globalPower * 0.2f, -1.f, 1.f);
     }
@@ -618,15 +558,12 @@ simd::float_4 getBlockExpressions(
     simd::float_4 invertPower = ~(isRising ^ curveBendedUp);
     simd::float_4 finalPhase = simd::ifelse(invertPower, 1.f - phase, phase);
     // Our target is between x^2 and x^8
-    simd::float_4 finalPower =
-        5.f + simd::ifelse(invertPower, -exprPower, exprPower) * 3.f;
+    simd::float_4 finalPower = 5.f + simd::ifelse(invertPower, -exprPower, exprPower) * 3.f;
     // simd::float_4 powOutput = simd::ifelse(finalPhase > 0.f,
     // simd::pow(finalPhase, finalPower), 0.f);
     simd::float_4 powOutput = interPow(finalPhase, finalPower);
-    simd::float_4 exprResult =
-        simd::ifelse(invertPower, 1.f - powOutput, powOutput);
-    simd::float_4 exprMix =
-        simd::crossfade(phase, exprResult, simd::abs(exprCurve));
+    simd::float_4 exprResult = simd::ifelse(invertPower, 1.f - powOutput, powOutput);
+    simd::float_4 exprMix = simd::crossfade(phase, exprResult, simd::abs(exprCurve));
     simd::float_4 exprAmplitude = exprOut - exprIn;
     simd::float_4 exprScaled = exprIn + exprMix * exprAmplitude;
     return exprScaled;
@@ -637,134 +574,89 @@ void Phaseque::renderStepMono() {
 
     // Calculating the step phase
     simd::float_4 patternPhase = this->phaseShifted;
-    simd::float_4 stepIns =
-        this->pattern.stepMutaInsComputed[this->pattern.activeBlockIdx];
+    simd::float_4 stepIns = this->pattern.stepMutaInsComputed[this->pattern.activeBlockIdx];
     simd::float_4 stepPhases =
-        (patternPhase
-         - simd::ifelse(patternPhase < stepIns, stepIns - 1.f, stepIns))
-        / simd::fmax(
-            this->pattern.stepBasesMutated[StepAttr::STEP_LEN]
-                                          [this->pattern.activeBlockIdx],
-            0.01f);
+        (patternPhase - simd::ifelse(patternPhase < stepIns, stepIns - 1.f, stepIns))
+        / simd::fmax(this->pattern.stepBasesMutated[StepAttr::STEP_LEN][this->pattern.activeBlockIdx], 0.01f);
     stepPhases = clamp(stepPhases, 0.f, 1.f);
 
     if (outputs[V_OUTPUT].isConnected()) {
         float v[4];
-        this->pattern
-            .stepBasesMutated[StepAttr::STEP_VALUE]
-                             [this->pattern.activeBlockIdx]
-            .store(v);
+        this->pattern.stepBasesMutated[StepAttr::STEP_VALUE][this->pattern.activeBlockIdx].store(v);
         outputs[V_OUTPUT].setVoltage(v[stepInBlockIdx]);
     }
 
     if (outputs[SHIFT_OUTPUT].isConnected()) {
         float shift[4];
-        this->pattern
-            .stepBasesMutated[StepAttr::STEP_SHIFT]
-                             [this->pattern.activeBlockIdx]
-            .store(shift);
-        outputs[SHIFT_OUTPUT].setVoltage(
-            shift[stepInBlockIdx] / this->pattern.baseStepLen * 5.f);
+        this->pattern.stepBasesMutated[StepAttr::STEP_SHIFT][this->pattern.activeBlockIdx].store(shift);
+        outputs[SHIFT_OUTPUT].setVoltage(shift[stepInBlockIdx] / this->pattern.baseStepLen * 5.f);
     }
 
     if (outputs[LEN_OUTPUT].isConnected()) {
         float len[4];
-        this->pattern
-            .stepBasesMutated[StepAttr::STEP_LEN][this->pattern.activeBlockIdx]
-            .store(len);
-        outputs[LEN_OUTPUT].setVoltage(
-            (len[stepInBlockIdx] / this->pattern.baseStepLen - 1.f) * 5.f);
+        this->pattern.stepBasesMutated[StepAttr::STEP_LEN][this->pattern.activeBlockIdx].store(len);
+        outputs[LEN_OUTPUT].setVoltage((len[stepInBlockIdx] / this->pattern.baseStepLen - 1.f) * 5.f);
     }
 
     if (outputs[EXPR_OUTPUT].isConnected()) {
         float expressions[4];
-        getBlockExpressions(
-            this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_IN]
-                                          [this->pattern.activeBlockIdx],
-            this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_OUT]
-                                          [this->pattern.activeBlockIdx],
-            this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_POWER]
-                                          [this->pattern.activeBlockIdx],
-            this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_CURVE]
-                                          [this->pattern.activeBlockIdx],
-            stepPhases,
-            this->globalPower,
-            this->globalCurve)
+        getBlockExpressions(this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_IN][this->pattern.activeBlockIdx],
+                            this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_OUT][this->pattern.activeBlockIdx],
+                            this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_POWER][this->pattern.activeBlockIdx],
+                            this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_CURVE][this->pattern.activeBlockIdx],
+                            stepPhases, this->globalPower, this->globalCurve)
             .store(expressions);
         outputs[EXPR_OUTPUT].setVoltage(expressions[stepInBlockIdx] * 5.f);
     }
 
     if (outputs[EXPR_CURVE_OUTPUT].isConnected()) {
         float curve[4];
-        this->pattern
-            .stepBasesMutated[StepAttr::STEP_EXPR_CURVE]
-                             [this->pattern.activeBlockIdx]
-            .store(curve);
+        this->pattern.stepBasesMutated[StepAttr::STEP_EXPR_CURVE][this->pattern.activeBlockIdx].store(curve);
         outputs[EXPR_CURVE_OUTPUT].setVoltage(curve[stepInBlockIdx] * 5.f);
     }
 
     if (outputs[PHASE_OUTPUT].isConnected()) {
         float stepPhasesScalar[4];
         stepPhases.store(stepPhasesScalar);
-        outputs[PHASE_OUTPUT].setVoltage(
-            stepPhasesScalar[stepInBlockIdx] * 10.f);
+        outputs[PHASE_OUTPUT].setVoltage(stepPhasesScalar[stepInBlockIdx] * 10.f);
     }
 }
 
-void Phaseque::renderAttrs(
-    simd::float_4* ins,
-    simd::float_4 (*attrs)[STEP_ATTRS_TOTAL][2],
-    simd::float_4* hits,
-    int blockIdx,
-    int chanOffset) {
+void Phaseque::renderAttrs(simd::float_4* ins, simd::float_4 (*attrs)[STEP_ATTRS_TOTAL][2], simd::float_4* hits,
+                           int blockIdx, int chanOffset) {
     simd::float_4 patternPhase = this->phaseShifted;
     simd::float_4 stepIns = *ins;
-    simd::float_4 stepPhases = (patternPhase - stepIns)
-                               / simd::fmax((*attrs)[StepAttr::STEP_LEN][blockIdx], 0.01f);
+    simd::float_4 stepPhases = (patternPhase - stepIns) / simd::fmax((*attrs)[StepAttr::STEP_LEN][blockIdx], 0.01f);
     stepPhases = clamp(stepPhases, 0.f, 1.f);
 
     if (outputs[GATE_OUTPUT].isConnected()) {
-        outputs[GATE_OUTPUT].setVoltageSimd(
-            this->clutch ? simd::ifelse(*hits, 10.f, 0.f) : 0.f,
-            chanOffset);
+        outputs[GATE_OUTPUT].setVoltageSimd(this->clutch ? simd::ifelse(*hits, 10.f, 0.f) : 0.f, chanOffset);
     }
 
     if (outputs[V_OUTPUT].isConnected()) {
-        outputs[V_OUTPUT].setVoltageSimd(
-            (*attrs)[StepAttr::STEP_VALUE][blockIdx],
-            chanOffset);
+        outputs[V_OUTPUT].setVoltageSimd((*attrs)[StepAttr::STEP_VALUE][blockIdx], chanOffset);
     }
 
     if (outputs[SHIFT_OUTPUT].isConnected()) {
-        outputs[SHIFT_OUTPUT].setVoltageSimd(
-            (*attrs)[StepAttr::STEP_SHIFT][blockIdx] / this->pattern.baseStepLen
-                * 5.f,
-            chanOffset);
+        outputs[SHIFT_OUTPUT].setVoltageSimd((*attrs)[StepAttr::STEP_SHIFT][blockIdx] / this->pattern.baseStepLen * 5.f,
+                                             chanOffset);
     }
 
     if (outputs[LEN_OUTPUT].isConnected()) {
-        outputs[LEN_OUTPUT].setVoltageSimd(
-            (*attrs)[StepAttr::STEP_SHIFT][blockIdx] / this->pattern.baseStepLen
-                - 1.f,
-            chanOffset);
+        outputs[LEN_OUTPUT].setVoltageSimd((*attrs)[StepAttr::STEP_SHIFT][blockIdx] / this->pattern.baseStepLen - 1.f,
+                                           chanOffset);
     }
 
     if (outputs[EXPR_OUTPUT].isConnected()) {
         simd::float_4 expressions = getBlockExpressions(
-            (*attrs)[StepAttr::STEP_EXPR_IN][blockIdx],
-            (*attrs)[StepAttr::STEP_EXPR_OUT][blockIdx],
-            (*attrs)[StepAttr::STEP_EXPR_POWER][blockIdx],
-            (*attrs)[StepAttr::STEP_EXPR_CURVE][blockIdx],
-            stepPhases,
-            this->globalPower,
-            this->globalCurve);
+            (*attrs)[StepAttr::STEP_EXPR_IN][blockIdx], (*attrs)[StepAttr::STEP_EXPR_OUT][blockIdx],
+            (*attrs)[StepAttr::STEP_EXPR_POWER][blockIdx], (*attrs)[StepAttr::STEP_EXPR_CURVE][blockIdx], stepPhases,
+            this->globalPower, this->globalCurve);
         outputs[EXPR_OUTPUT].setVoltageSimd(expressions * 5.f, chanOffset);
     }
 
     if (outputs[EXPR_CURVE_OUTPUT].isConnected()) {
-        outputs[EXPR_CURVE_OUTPUT].setVoltageSimd(
-            (*attrs)[StepAttr::STEP_EXPR_CURVE][blockIdx] * 5.f,
-            chanOffset);
+        outputs[EXPR_CURVE_OUTPUT].setVoltageSimd((*attrs)[StepAttr::STEP_EXPR_CURVE][blockIdx] * 5.f, chanOffset);
     }
 
     if (outputs[PHASE_OUTPUT].isConnected()) {
@@ -773,21 +665,15 @@ void Phaseque::renderAttrs(
 }
 
 void Phaseque::renderPolyphonic() {
-    for (unsigned int blockIdx = 0; blockIdx < this->pattern.size / BLOCK_SIZE;
-         blockIdx++) {
+    for (unsigned int blockIdx = 0; blockIdx < this->pattern.size / BLOCK_SIZE; blockIdx++) {
         int chanOffset = blockIdx * BLOCK_SIZE;
-        this->renderAttrs(
-            &this->pattern.stepMutaInsComputed[blockIdx],
-            &this->pattern.stepBasesMutated,
-            &this->pattern.hits[blockIdx],
-            blockIdx,
-            chanOffset);
+        this->renderAttrs(&this->pattern.stepMutaInsComputed[blockIdx], &this->pattern.stepBasesMutated,
+                          &this->pattern.hits[blockIdx], blockIdx, chanOffset);
 
         int gateMask = simd::movemask(this->pattern.hits[blockIdx]);
-        for (int stepInBlockIdx = 0; stepInBlockIdx < BLOCK_SIZE;
-             stepInBlockIdx++) {
-            outputs[STEP_GATE_OUTPUT + chanOffset + stepInBlockIdx].setVoltage(
-                gateMask & 1 << stepInBlockIdx ? 10.f : 0.f);
+        for (int stepInBlockIdx = 0; stepInBlockIdx < BLOCK_SIZE; stepInBlockIdx++) {
+            outputs[STEP_GATE_OUTPUT + chanOffset + stepInBlockIdx].setVoltage(gateMask & 1 << stepInBlockIdx ? 10.f
+                                                                                                              : 0.f);
         }
     }
 }
@@ -795,39 +681,24 @@ void Phaseque::renderPolyphonic() {
 void Phaseque::renderUnison() {
     int gateMasks[2] = { 0, 0 };
 
-    for (unsigned int blockIdx = 0; blockIdx < this->pattern.size / BLOCK_SIZE;
-         blockIdx++) {
+    for (unsigned int blockIdx = 0; blockIdx < this->pattern.size / BLOCK_SIZE; blockIdx++) {
         int chanOffset = blockIdx * BLOCK_SIZE;
-        this->renderAttrs(
-            &this->pattern.stepMutaInsComputed[blockIdx],
-            &this->pattern.stepBasesMutated,
-            &this->pattern.hits[blockIdx],
-            blockIdx,
-            chanOffset);
-        gateMasks[blockIdx] =
-            gateMasks[blockIdx] | simd::movemask(this->pattern.hits[blockIdx]);
+        this->renderAttrs(&this->pattern.stepMutaInsComputed[blockIdx], &this->pattern.stepBasesMutated,
+                          &this->pattern.hits[blockIdx], blockIdx, chanOffset);
+        gateMasks[blockIdx] = gateMasks[blockIdx] | simd::movemask(this->pattern.hits[blockIdx]);
     }
 
-    for (unsigned int blockIdx = 0; blockIdx < this->pattern.size / BLOCK_SIZE;
-         blockIdx++) {
+    for (unsigned int blockIdx = 0; blockIdx < this->pattern.size / BLOCK_SIZE; blockIdx++) {
         int chanOffset = 8 + blockIdx * BLOCK_SIZE;
-        this->renderAttrs(
-            &this->pattern.stepInsComputed[blockIdx],
-            &this->pattern.stepBases,
-            &this->pattern.hitsClean[blockIdx],
-            blockIdx,
-            chanOffset);
-        gateMasks[blockIdx] = gateMasks[blockIdx]
-                              | simd::movemask(this->pattern.hitsClean[blockIdx]);
+        this->renderAttrs(&this->pattern.stepInsComputed[blockIdx], &this->pattern.stepBases,
+                          &this->pattern.hitsClean[blockIdx], blockIdx, chanOffset);
+        gateMasks[blockIdx] = gateMasks[blockIdx] | simd::movemask(this->pattern.hitsClean[blockIdx]);
     }
 
-    for (unsigned int blockIdx = 0; blockIdx < this->pattern.size / BLOCK_SIZE;
-         blockIdx++) {
-        for (int stepInBlockIdx = 0; stepInBlockIdx < BLOCK_SIZE;
-             stepInBlockIdx++) {
-            outputs[STEP_GATE_OUTPUT + blockIdx * BLOCK_SIZE + stepInBlockIdx]
-                .setVoltage(
-                    gateMasks[blockIdx] & 1 << stepInBlockIdx ? 10.f : 0.f);
+    for (unsigned int blockIdx = 0; blockIdx < this->pattern.size / BLOCK_SIZE; blockIdx++) {
+        for (int stepInBlockIdx = 0; stepInBlockIdx < BLOCK_SIZE; stepInBlockIdx++) {
+            outputs[STEP_GATE_OUTPUT + blockIdx * BLOCK_SIZE + stepInBlockIdx].setVoltage(
+                gateMasks[blockIdx] & 1 << stepInBlockIdx ? 10.f : 0.f);
         }
     }
 }
@@ -896,8 +767,7 @@ void Phaseque::processTransport(bool phaseWasZeroed, float sampleTime) {
             if (absMode) {
                 phase = phaseIn;
             } else {
-                if (inputs[CLOCK_INPUT].isConnected()
-                    && clockTrigger.process(inputs[CLOCK_INPUT].getVoltage())) {
+                if (inputs[CLOCK_INPUT].isConnected() && clockTrigger.process(inputs[CLOCK_INPUT].getVoltage())) {
                     float targetPhase = phase + phaseInDelta / resolution;
                     float delta = fmodf(targetPhase * resolution, 1.0f);
                     if (delta < 0.01) {
@@ -921,8 +791,7 @@ void Phaseque::processTransport(bool phaseWasZeroed, float sampleTime) {
 
         float currentStep = floorf(phase * resolution);
 
-        if (clockTrigger.process(inputs[CLOCK_INPUT].getVoltage())
-            && samplesSinceLastReset > 19) {
+        if (clockTrigger.process(inputs[CLOCK_INPUT].getVoltage()) && samplesSinceLastReset > 19) {
             tempoTracker.tick(sampleTime);
             if (clutch) {
                 if (bps < 0.0f) {
@@ -941,9 +810,7 @@ void Phaseque::processTransport(bool phaseWasZeroed, float sampleTime) {
             if (inputs[VBPS_INPUT].isConnected()) {
                 if (this->useCompatibleBPMCV) {
                     double bpm = params[BPM_PARAM].getValue()
-                                 * dsp::approxExp2_taylor5(
-                                     inputs[VBPS_INPUT].getVoltage() + 10.f)
-                                 / 1024.f;
+                                 * dsp::approxExp2_taylor5(inputs[VBPS_INPUT].getVoltage() + 10.f) / 1024.f;
                     bps = bpm / 60.0;
                 } else {
                     bps = inputs[VBPS_INPUT].getVoltage();
@@ -962,13 +829,11 @@ void Phaseque::processTransport(bool phaseWasZeroed, float sampleTime) {
                 bps = params[BPM_PARAM].getValue() / 60.0f;
             }
 
-            float nextPhase =
-                fastmod(phase + bps * sampleTime / resolution, 1.0f);
+            float nextPhase = fastmod(phase + bps * sampleTime / resolution, 1.0f);
             float nextStep = floorf(nextPhase * resolution);
 
             if (clutch) {
-                if (nextStep == currentStep
-                    || (bps < 0.0f && (tickedAtLastSample || resetPulse))) {
+                if (nextStep == currentStep || (bps < 0.0f && (tickedAtLastSample || resetPulse))) {
                     phase = nextPhase;
                 }
             }
@@ -977,10 +842,8 @@ void Phaseque::processTransport(bool phaseWasZeroed, float sampleTime) {
     } else if (inputs[VBPS_INPUT].isConnected()) {
         bpmDisabled = false;
         if (this->useCompatibleBPMCV) {
-            double bpm = params[BPM_PARAM].getValue()
-                         * dsp::approxExp2_taylor5(
-                             inputs[VBPS_INPUT].getVoltage() + 10.f)
-                         / 1024.f;
+            double bpm =
+                params[BPM_PARAM].getValue() * dsp::approxExp2_taylor5(inputs[VBPS_INPUT].getVoltage() + 10.f) / 1024.f;
             bps = bpm / 60.0;
         } else {
             bps = inputs[VBPS_INPUT].getVoltage();
@@ -993,8 +856,7 @@ void Phaseque::processTransport(bool phaseWasZeroed, float sampleTime) {
         }
 
         if (clutch) {
-            float nextPhase =
-                fastmod(phase + bps * sampleTime / resolution, 1.0f);
+            float nextPhase = fastmod(phase + bps * sampleTime / resolution, 1.0f);
             phase = nextPhase;
         }
     } else {
@@ -1003,8 +865,7 @@ void Phaseque::processTransport(bool phaseWasZeroed, float sampleTime) {
         bps = bpm / 60.0;
 
         if (clutch) {
-            float nextPhase =
-                fastmod(phase + bps * sampleTime / resolution, 1.0f);
+            float nextPhase = fastmod(phase + bps * sampleTime / resolution, 1.0f);
             phase = nextPhase;
         }
     }
@@ -1039,8 +900,7 @@ void Phaseque::processTransport(bool phaseWasZeroed, float sampleTime) {
     }
 
     float phaseDelta = phaseShifted - lastPhaseShifted;
-    if (phaseDelta != 0.0f && fabsf(phaseDelta) < 0.95f && !phaseWasZeroed
-        && !jump) {
+    if (phaseDelta != 0.0f && fabsf(phaseDelta) < 0.95f && !phaseWasZeroed && !jump) {
         direction = phaseDelta > 0.0f ? 1 : -1;
     }
 
@@ -1061,14 +921,10 @@ void Phaseque::feedDisplays() {
         this->gridDisplayConsumer->currentPatternGoTo = this->pattern.goTo;
         this->gridDisplayConsumer->consumed = false;
         for (unsigned int i = 0; i < NUM_PATTERNS; i++) {
-            this->gridDisplayConsumer->dirtyMask.set(
-                i,
-                this->patterns[i].hasCustomSteps());
+            this->gridDisplayConsumer->dirtyMask.set(i, this->patterns[i].hasCustomSteps());
         }
-        this->gridDisplayConsumer->patternFlashNeg =
-            this->patternFlashNeg != -1 ? this->patternFlashNeg : -1;
-        this->gridDisplayConsumer->patternFlashPos =
-            this->patternFlashPos != -1 ? this->patternFlashPos : -1;
+        this->gridDisplayConsumer->patternFlashNeg = this->patternFlashNeg != -1 ? this->patternFlashNeg : -1;
+        this->gridDisplayConsumer->patternFlashPos = this->patternFlashPos != -1 ? this->patternFlashPos : -1;
     }
 
     if (!this->mainDisplayConsumer) {
@@ -1116,13 +972,9 @@ void Phaseque::process(const ProcessArgs& args) {
 
     lastActiveStep = activeStep;
 
-    outputs[PTRN_START_OUTPUT].setVoltage(
-        ptrnStartPulseGenerator.process(sampleTime) ? 10.0f : 0.0f);
-    outputs[PTRN_END_OUTPUT].setVoltage(
-        ptrnEndPulseGenerator.process(sampleTime) ? 10.0f : 0.0f);
-    outputs[PTRN_WRAP_OUTPUT].setVoltage(std::max(
-        outputs[PTRN_START_OUTPUT].value,
-        outputs[PTRN_END_OUTPUT].value));
+    outputs[PTRN_START_OUTPUT].setVoltage(ptrnStartPulseGenerator.process(sampleTime) ? 10.0f : 0.0f);
+    outputs[PTRN_END_OUTPUT].setVoltage(ptrnEndPulseGenerator.process(sampleTime) ? 10.0f : 0.0f);
+    outputs[PTRN_WRAP_OUTPUT].setVoltage(std::max(outputs[PTRN_START_OUTPUT].value, outputs[PTRN_END_OUTPUT].value));
 
     float voltsForPattern = (patternIdx - 1) * 1.0f / 12.0f;
     outputs[PTRN_OUTPUT].setVoltage(voltsForPattern);
@@ -1131,8 +983,7 @@ void Phaseque::process(const ProcessArgs& args) {
         wentPulseGenerator.trigger(1e-3f);
         lastPatternIdx = patternIdx;
     }
-    outputs[WENT_OUTPUT].setVoltage(
-        wentPulseGenerator.process(sampleTime) ? 10.0f : 0.0f);
+    outputs[WENT_OUTPUT].setVoltage(wentPulseGenerator.process(sampleTime) ? 10.0f : 0.0f);
 
     if (resetPulse && !absMode) {
         retrigGapGenerator.trigger(1e-4f);
@@ -1153,27 +1004,21 @@ void Phaseque::process(const ProcessArgs& args) {
         }
 
         if (this->pattern.hasActiveStep) {
-            if (this->pattern.activeStepIdx
-                != this->pattern.lastActiveStepIdx) {
+            if (this->pattern.activeStepIdx != this->pattern.lastActiveStepIdx) {
                 retrigGapGenerator.trigger(1e-4f);
             }
             this->renderStepMono();
-            outputs[STEP_GATE_OUTPUT + this->pattern.activeStepIdx].setVoltage(
-                10.f);
+            outputs[STEP_GATE_OUTPUT + this->pattern.activeStepIdx].setVoltage(10.f);
         }
 
         bool retrigGap = retrigGapGenerator.process(sampleTime);
-        outputs[GATE_OUTPUT].setVoltage(
-            this->clutch && this->pattern.hasActiveStep && !retrigGap ? 10.f
-                                                                      : 0.f);
+        outputs[GATE_OUTPUT].setVoltage(this->clutch && this->pattern.hasActiveStep && !retrigGap ? 10.f : 0.f);
     } else if (this->polyphonyMode == PolyphonyModes::POLYPHONIC) {
         this->pattern.findStepsForPhase(this->phaseShifted, this->globalGate);
         this->renderPolyphonic();
     } else if (this->polyphonyMode == PolyphonyModes::UNISON) {
         this->pattern.findStepsForPhase(this->phaseShifted, this->globalGate);
-        this->pattern.findCleanStepsForPhase(
-            this->phaseShifted,
-            this->globalGate);
+        this->pattern.findCleanStepsForPhase(this->phaseShifted, this->globalGate);
         this->renderUnison();
     }
 

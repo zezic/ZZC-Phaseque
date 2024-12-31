@@ -77,11 +77,7 @@ struct PolyModeItem : MenuItem {
     Menu* createChildMenu() override {
         Menu* menu = new Menu;
 
-        std::vector<std::string> polyModeNames = {
-            "Monophonic",
-            "Polyphonic 8",
-            "Muta-Unison 16"
-        };
+        std::vector<std::string> polyModeNames = { "Monophonic", "Polyphonic 8", "Muta-Unison 16" };
 
         for (int i = 0; i < NUM_POLYPHONY_MODES; i++) {
             PolyphonyModes polyMode = (PolyphonyModes) i;
@@ -128,8 +124,7 @@ struct ExternalCVModeItem : MenuItem {
     Menu* createChildMenu() override {
         Menu* menu = new Menu;
 
-        ExternalCVModeCompatibleOptionItem* item1 =
-            new ExternalCVModeCompatibleOptionItem;
+        ExternalCVModeCompatibleOptionItem* item1 = new ExternalCVModeCompatibleOptionItem;
         item1->text = "V/OCT";
         item1->rightText = CHECKMARK(module->useCompatibleBPMCV);
         item1->module = module;

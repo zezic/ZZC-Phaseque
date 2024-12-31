@@ -47,20 +47,12 @@ struct GridDisplay : BaseDisplayWidget {
     std::shared_ptr<GridDisplayConsumer> consumer;
 
     GridDisplay() {
-        font = APP->window->loadFont(
-            asset::plugin(pluginInstance, "res/fonts/Nunito/Nunito-Bold.ttf"));
+        font = APP->window->loadFont(asset::plugin(pluginInstance, "res/fonts/Nunito/Nunito-Bold.ttf"));
     }
 
-    void drawPattern(
-        const DrawArgs& args,
-        bool hasCustomSteps,
-        int idx,
-        int currentPatternGoTo,
-        int currentIdxVal) {
-        float x = padding + ((idx) % 4) * (patSize + gapSize)
-                  + (idx > 15 ? (patSize + gapSize) * 4 : 0.0f);
-        float y = box.size.y - ((idx) % 16) / 4 * (patSize + gapSize)
-                  - (patSize) -padding;
+    void drawPattern(const DrawArgs& args, bool hasCustomSteps, int idx, int currentPatternGoTo, int currentIdxVal) {
+        float x = padding + ((idx) % 4) * (patSize + gapSize) + (idx > 15 ? (patSize + gapSize) * 4 : 0.0f);
+        float y = box.size.y - ((idx) % 16) / 4 * (patSize + gapSize) - (patSize) -padding;
 
         bool isClean = !hasCustomSteps;
 
@@ -71,13 +63,7 @@ struct GridDisplay : BaseDisplayWidget {
             nvgFill(args.vg);
         } else if (idx == currentPatternGoTo) {
             nvgBeginPath(args.vg);
-            nvgRoundedRect(
-                args.vg,
-                x + 0.5,
-                y + 0.5,
-                patSize - 1,
-                patSize - 1,
-                1.0);
+            nvgRoundedRect(args.vg, x + 0.5, y + 0.5, patSize - 1, patSize - 1, 1.0);
             nvgFillColor(args.vg, lcdDisabledColor);
             nvgStrokeColor(args.vg, lcdActiveColor);
             if (!isClean) {
@@ -94,9 +80,7 @@ struct GridDisplay : BaseDisplayWidget {
         if (this->flashes[idx] != 0.f) {
             NVGcolor color = this->flashes[idx] > 0.f ? posColor : negColor;
             nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
-            nvgGlobalAlpha(
-                args.vg,
-                std::min(std::abs(this->flashes[idx]), 1.f));
+            nvgGlobalAlpha(args.vg, std::min(std::abs(this->flashes[idx]), 1.f));
             nvgBeginPath(args.vg);
             nvgRoundedRect(args.vg, x, y, patSize, patSize, 1.0);
             nvgFillColor(args.vg, color);
@@ -137,12 +121,8 @@ struct GridDisplay : BaseDisplayWidget {
         nvgTextLetterSpacing(args.vg, -1.0);
 
         for (unsigned int i = 0; i < NUM_PATTERNS; i++) {
-            drawPattern(
-                args,
-                this->consumer->dirtyMask.test(i),
-                i,
-                this->consumer->currentPatternGoTo,
-                this->consumer->currentPattern);
+            drawPattern(args, this->consumer->dirtyMask.test(i), i, this->consumer->currentPatternGoTo,
+                        this->consumer->currentPattern);
         }
     }
 };
@@ -196,9 +176,7 @@ struct GridDisplayWidget : widget::OpaqueWidget {
     void onButton(const event::Button& e) override {
         int button = e.button;
 
-        if ((button == GLFW_MOUSE_BUTTON_LEFT
-             || button == GLFW_MOUSE_BUTTON_RIGHT)
-            && e.action == GLFW_PRESS) {
+        if ((button == GLFW_MOUSE_BUTTON_LEFT || button == GLFW_MOUSE_BUTTON_RIGHT) && e.action == GLFW_PRESS) {
             e.consume(this);
         } else {
             return;
@@ -207,18 +185,12 @@ struct GridDisplayWidget : widget::OpaqueWidget {
         float x = e.pos.x;
         float y = e.pos.y;
 
-        float ix =
-            clamp(floorf((x - padding) / (patSize + gapSize)), 0.0f, 7.0f);
-        float iy = clamp(
-            floorf((box.size.y - y - padding) / (patSize + gapSize)),
-            0.0f,
-            3.0f);
+        float ix = clamp(floorf((x - padding) / (patSize + gapSize)), 0.0f, 7.0f);
+        float iy = clamp(floorf((box.size.y - y - padding) / (patSize + gapSize)), 0.0f, 3.0f);
 
-        float targetIdx =
-            fmodf(ix, 4.0f) + (iy * 4.0f) + (ix >= 4.0f ? 16.0f : 0.0f);
+        float targetIdx = fmodf(ix, 4.0f) + (iy * 4.0f) + (ix >= 4.0f ? 16.0f : 0.0f);
 
-        unsigned int targetIdxInt =
-            clamp((unsigned int) targetIdx, 0, NUM_PATTERNS - 1);
+        unsigned int targetIdxInt = clamp((unsigned int) targetIdx, 0, NUM_PATTERNS - 1);
 
         if (button == GLFW_MOUSE_BUTTON_LEFT) {
             if (this->producer->hasGoToRequest) {

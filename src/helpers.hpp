@@ -123,8 +123,7 @@ inline float fastmod(float value, float base) {
     return value - base;
 }
 
-inline float
-    curve(float phase, float curvature, float power, float in, float out) {
+inline float curve(float phase, float curvature, float power, float in, float out) {
     float range = out - in;
 
     if (curvature == 0.0f) {
@@ -138,8 +137,7 @@ inline float
 
     // float spline = invSpline ? (1.0f - std::pow(1.0f - phase, power)) :
     // std::pow(phase, power);
-    float spline = invSpline ? (1.0f - crossfadePow(1.0f - phase, power))
-                             : crossfadePow(phase, power);
+    float spline = invSpline ? (1.0f - crossfadePow(1.0f - phase, power)) : crossfadePow(phase, power);
 
     // float deformed = (phase * (1.0f - absCurvature)) + spline * absCurvature;
     // float deformed = phase + (spline - phase) * absCurvature;

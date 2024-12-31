@@ -92,14 +92,12 @@ struct PhasequeStepAttrChange : history::ModuleAction {
         unsigned int blockIdx = step / phaseq->pattern.blockSize;
         unsigned int stepInBlockIdx = step % phaseq->pattern.blockSize;
 
-        phaseq->patterns[patternNum].stepBases[attr][blockIdx][stepInBlockIdx] =
-            oldValue;
+        phaseq->patterns[patternNum].stepBases[attr][blockIdx][stepInBlockIdx] = oldValue;
         phaseq->patterns[patternNum].applyMutations(attr, blockIdx);
         phaseq->patterns[patternNum].recalcInOuts(blockIdx);
 
         if (phaseq->patternIdx == patternNum) {
-            phaseq->pattern.stepBases[attr][blockIdx][stepInBlockIdx] =
-                oldValue;
+            phaseq->pattern.stepBases[attr][blockIdx][stepInBlockIdx] = oldValue;
             phaseq->pattern.applyMutations(attr, blockIdx);
             phaseq->pattern.recalcInOuts(blockIdx);
             mw->module->params[paramId].value = oldValue;
@@ -116,14 +114,12 @@ struct PhasequeStepAttrChange : history::ModuleAction {
         unsigned int blockIdx = step / phaseq->pattern.blockSize;
         unsigned int stepInBlockIdx = step % phaseq->pattern.blockSize;
 
-        phaseq->patterns[patternNum].stepBases[attr][blockIdx][stepInBlockIdx] =
-            newValue;
+        phaseq->patterns[patternNum].stepBases[attr][blockIdx][stepInBlockIdx] = newValue;
         phaseq->patterns[patternNum].applyMutations(attr, blockIdx);
         phaseq->patterns[patternNum].recalcInOuts(blockIdx);
 
         if (phaseq->patternIdx == patternNum) {
-            phaseq->pattern.stepBases[attr][blockIdx][stepInBlockIdx] =
-                newValue;
+            phaseq->pattern.stepBases[attr][blockIdx][stepInBlockIdx] = newValue;
             phaseq->pattern.applyMutations(attr, blockIdx);
             phaseq->pattern.recalcInOuts(blockIdx);
             mw->module->params[paramId].value = newValue;

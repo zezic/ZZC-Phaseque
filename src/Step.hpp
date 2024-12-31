@@ -117,8 +117,7 @@ struct Step {
     }
 
     float in() {
-        return in_ + attrs[STEP_SHIFT].value
-               + (patternShift ? *patternShift : 0.0f)
+        return in_ + attrs[STEP_SHIFT].value + (patternShift ? *patternShift : 0.0f)
                + (globalShift ? *globalShift : 0.0f);
     }
 
@@ -127,8 +126,7 @@ struct Step {
     }
 
     float inBase() {
-        return in_ + attrs[STEP_SHIFT].base
-               + (patternShift ? *patternShift : 0.0f)
+        return in_ + attrs[STEP_SHIFT].base + (patternShift ? *patternShift : 0.0f)
                + (globalShift ? *globalShift : 0.0f);
     }
 
@@ -147,11 +145,7 @@ struct Step {
 
         for (int i = 0; i < STEP_ATTRS_TOTAL; i++) {
             AttrDefaults defaults = getAttrDefaults(i);
-            this->attrs[i].setup(
-                defaults.defaultValue,
-                defaults.minValue,
-                defaults.maxValue,
-                defaults.mutMult);
+            this->attrs[i].setup(defaults.defaultValue, defaults.minValue, defaults.maxValue, defaults.mutMult);
             this->attrs[i].init();
         }
 
@@ -160,9 +154,7 @@ struct Step {
     }
 
     float minLen() {
-        return std::max(
-            minStepLen,
-            this->attrs[STEP_LEN].value * (globalLen ? *globalLen : 1.0f));
+        return std::max(minStepLen, this->attrs[STEP_LEN].value * (globalLen ? *globalLen : 1.0f));
     }
 
     float minLen(float globalLen) {
@@ -170,9 +162,7 @@ struct Step {
     }
 
     float minLenBase() {
-        return std::max(
-            minStepLen,
-            this->attrs[STEP_LEN].base * (globalLen ? *globalLen : 1.0f));
+        return std::max(minStepLen, this->attrs[STEP_LEN].base * (globalLen ? *globalLen : 1.0f));
     }
 
     float minLenBase(float globalLen) {
@@ -195,65 +185,33 @@ struct Step {
     inline float expr(float phase) {
         return curve(
             phase,
-            clamp(
-                this->attrs[STEP_EXPR_CURVE].value
-                    + (exprCurvePort ? exprCurvePort->getVoltage() * 0.2f : 0.0f),
-                -1.0f,
-                1.0f),
-            clamp(
-                this->attrs[STEP_EXPR_POWER].value
-                    + (exprPowerPort ? exprPowerPort->getVoltage() * 0.2f : 0.0f),
-                -1.0f,
-                1.0f),
-            this->attrs[STEP_EXPR_IN].value,
-            this->attrs[STEP_EXPR_OUT].value);
+            clamp(this->attrs[STEP_EXPR_CURVE].value + (exprCurvePort ? exprCurvePort->getVoltage() * 0.2f : 0.0f),
+                  -1.0f, 1.0f),
+            clamp(this->attrs[STEP_EXPR_POWER].value + (exprPowerPort ? exprPowerPort->getVoltage() * 0.2f : 0.0f),
+                  -1.0f, 1.0f),
+            this->attrs[STEP_EXPR_IN].value, this->attrs[STEP_EXPR_OUT].value);
     }
 
     inline float expr(float phase, float exprCurveCV, float exprPowerCV) {
-        return curve(
-            phase,
-            clamp(
-                this->attrs[STEP_EXPR_CURVE].value + (exprCurveCV * 0.2f),
-                -1.0f,
-                1.0f),
-            clamp(
-                this->attrs[STEP_EXPR_POWER].value + (exprPowerCV * 0.2f),
-                -1.0f,
-                1.0f),
-            this->attrs[STEP_EXPR_IN].value,
-            this->attrs[STEP_EXPR_OUT].value);
+        return curve(phase, clamp(this->attrs[STEP_EXPR_CURVE].value + (exprCurveCV * 0.2f), -1.0f, 1.0f),
+                     clamp(this->attrs[STEP_EXPR_POWER].value + (exprPowerCV * 0.2f), -1.0f, 1.0f),
+                     this->attrs[STEP_EXPR_IN].value, this->attrs[STEP_EXPR_OUT].value);
     }
 
     inline float exprBase(float phase) {
         return curve(
             phase,
-            clamp(
-                this->attrs[STEP_EXPR_CURVE].base
-                    + (exprCurvePort ? exprCurvePort->getVoltage() * 0.2f : 0.0f),
-                -1.0f,
-                1.0f),
-            clamp(
-                this->attrs[STEP_EXPR_POWER].base
-                    + (exprPowerPort ? exprPowerPort->getVoltage() * 0.2f : 0.0f),
-                -1.0f,
-                1.0f),
-            this->attrs[STEP_EXPR_IN].base,
-            this->attrs[STEP_EXPR_OUT].base);
+            clamp(this->attrs[STEP_EXPR_CURVE].base + (exprCurvePort ? exprCurvePort->getVoltage() * 0.2f : 0.0f),
+                  -1.0f, 1.0f),
+            clamp(this->attrs[STEP_EXPR_POWER].base + (exprPowerPort ? exprPowerPort->getVoltage() * 0.2f : 0.0f),
+                  -1.0f, 1.0f),
+            this->attrs[STEP_EXPR_IN].base, this->attrs[STEP_EXPR_OUT].base);
     }
 
     inline float exprBase(float phase, float exprCurveCV, float exprPowerCV) {
-        return curve(
-            phase,
-            clamp(
-                this->attrs[STEP_EXPR_CURVE].base + (exprCurveCV * 0.2f),
-                -1.0f,
-                1.0f),
-            clamp(
-                this->attrs[STEP_EXPR_POWER].base + (exprPowerCV * 0.2f),
-                -1.0f,
-                1.0f),
-            this->attrs[STEP_EXPR_IN].base,
-            this->attrs[STEP_EXPR_OUT].base);
+        return curve(phase, clamp(this->attrs[STEP_EXPR_CURVE].base + (exprCurveCV * 0.2f), -1.0f, 1.0f),
+                     clamp(this->attrs[STEP_EXPR_POWER].base + (exprPowerCV * 0.2f), -1.0f, 1.0f),
+                     this->attrs[STEP_EXPR_IN].base, this->attrs[STEP_EXPR_OUT].base);
     }
 
     float phase(float transportPhase) {
@@ -275,9 +233,8 @@ struct Step {
     }
 
     void quantize() {
-        this->attrs[STEP_SHIFT].setValue(
-            roundf(this->attrs[STEP_SHIFT].value * (1.0f / baseStepLen) * 2.0f)
-            * baseStepLen * 0.5f);
+        this->attrs[STEP_SHIFT].setValue(roundf(this->attrs[STEP_SHIFT].value * (1.0f / baseStepLen) * 2.0f)
+                                         * baseStepLen * 0.5f);
     }
 
     void resetLength() {

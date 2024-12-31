@@ -1,10 +1,7 @@
 #pragma once
 #include <rack.hpp>
 
-enum PolyphonyModes { MONOPHONIC,
-                      POLYPHONIC,
-                      UNISON,
-                      NUM_POLYPHONY_MODES };
+enum PolyphonyModes { MONOPHONIC, POLYPHONIC, UNISON, NUM_POLYPHONY_MODES };
 
 using namespace rack;
 
