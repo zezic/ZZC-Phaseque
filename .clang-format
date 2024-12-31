@@ -1,90 +1,59 @@
----
-BasedOnStyle: WebKit
+AccessModifierOffset: -4
 AlignAfterOpenBracket: Align
-AlignConsecutiveAssignments: true
-AlignConsecutiveBitFields: true
-AlignConsecutiveDeclarations: true
-AlignConsecutiveMacros: true
-AlignEscapedNewlines: Left
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignEscapedNewlines: DontAlign
 AlignOperands: true
-AlignTrailingComments: true
-AllowAllArgumentsOnNextLine: false
-AllowAllConstructorInitializersOnNextLine: false
+AlignTrailingComments: false
 AllowAllParametersOfDeclarationOnNextLine: false
-AllowShortBlocksOnASingleLine: false
 AllowShortCaseLabelsOnASingleLine: false
-AllowShortFunctionsOnASingleLine: Inline
-AllowShortIfStatementsOnASingleLine: Never
-AllowShortLambdasOnASingleLine: Inline
-AllowShortLoopsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortLoopsOnASingleLine: true
 AlwaysBreakAfterReturnType: None
 AlwaysBreakBeforeMultilineStrings: false
-AlwaysBreakTemplateDeclarations: No
-BinPackArguments: false
-BinPackParameters: false
-BreakAfterJavaFieldAnnotations: false
-BreakBeforeBinaryOperators: All
-BreakBeforeBraces: Custom
-BraceWrapping:
-  AfterCaseLabel: false
-  AfterClass: true
-  AfterControlStatement: false
-  AfterEnum: false
-  AfterFunction: true
-  AfterNamespace: true
-  AfterObjCDeclaration: false
-  AfterStruct: false
-  AfterUnion: false
-  AfterExternBlock: false
-  BeforeCatch: false
-  BeforeElse: false
-  IndentBraces: false
-  SplitEmptyFunction: false
-  SplitEmptyRecord: false
-  SplitEmptyNamespace: false
-BreakBeforeTernaryOperators: false
-BreakConstructorInitializers: AfterColon
-BreakInheritanceList: AfterColon
+BinPackArguments: true
+BinPackParameters: true
+BreakBeforeBinaryOperators: NonAssignment
+BreakBeforeBraces: Attach
+BreakBeforeTernaryOperators: true
+BreakConstructorInitializers: BeforeColon
 BreakStringLiterals: false
-ColumnLimit: 100
-CompactNamespaces: true
-ConstructorInitializerAllOnOneLineOrOnePerLine: true
-Cpp11BracedListStyle: true
-DerivePointerAlignment: true
-DisableFormat: false
+ColumnLimit: 0
+CompactNamespaces: false
+ConstructorInitializerAllOnOneLineOrOnePerLine: false
+ConstructorInitializerIndentWidth: 0
+ContinuationIndentWidth: 4
+Cpp11BracedListStyle: false
+DerivePointerAlignment: false
+ExperimentalAutoDetectBinPacking: false
 FixNamespaceComments: true
-IncludeBlocks: Regroup
+IncludeBlocks: Merge
 IncludeCategories:
-  - Regex: "^<.*"
+  - Regex: '^<.*\.h>'
     Priority: 1
-  - Regex: ".*"
+  - Regex: '^<.*'
     Priority: 2
+  - Regex: '.*'
+    Priority: 3
 IndentCaseLabels: false
-IndentPPDirectives: None
+IndentPPDirectives: AfterHash
 IndentWidth: 4
 IndentWrappedFunctionNames: true
 KeepEmptyLinesAtTheStartOfBlocks: false
-Language: Cpp
-NamespaceIndentation: Inner
-PointerAlignment: Right
-ReflowComments: true
-SortIncludes: false
+MaxEmptyLinesToKeep: 1
+NamespaceIndentation: All
+PointerAlignment: Left
+SortIncludes: true
 SortUsingDeclarations: true
 SpaceAfterCStyleCast: true
-SpaceAfterLogicalNot: false
 SpaceAfterTemplateKeyword: false
 SpaceBeforeAssignmentOperators: true
-SpaceBeforeCpp11BracedList: false
-SpaceBeforeCtorInitializerColon: true
-SpaceBeforeInheritanceColon: true
 SpaceBeforeParens: ControlStatements
-SpaceBeforeRangeBasedForLoopColon: true
 SpaceInEmptyParentheses: false
+SpacesBeforeTrailingComments: 1
 SpacesInAngles: false
-SpacesInContainerLiterals: false
 SpacesInCStyleCastParentheses: false
+SpacesInContainerLiterals: false
 SpacesInParentheses: false
 SpacesInSquareBrackets: false
-Standard: Cpp11
-TabWidth: 4
 UseTab: Never
