@@ -1,6 +1,6 @@
 #pragma once
-#include "Phaseque.hpp"
 #include "Pattern.hpp"
+#include "Phaseque.hpp"
 
 #ifndef WIDGETS_H
 #    define WIDGETS_H

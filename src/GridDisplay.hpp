@@ -1,8 +1,7 @@
 #pragma once
 #include <bitset>
-#include "Phaseque.hpp"
-
 #include <rack.hpp>
+#include "Phaseque.hpp"
 #ifndef WIDGETS_H
 #    define WIDGETS_H
 #    include "../ZZC/src/widgets.hpp"
