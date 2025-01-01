@@ -31,8 +31,9 @@ struct ZZC_PhasequePatternResoKnob : SvgKnob {
     }
 
     void onDragStart(const DragStartEvent& e) override {
-        if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+        if (e.button != GLFW_MOUSE_BUTTON_LEFT) {
             return;
+        }
 
         engine::ParamQuantity* pq = getParamQuantity();
         if (pq) {
@@ -43,8 +44,9 @@ struct ZZC_PhasequePatternResoKnob : SvgKnob {
     }
 
     void onDragEnd(const event::DragEnd& e) override {
-        if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+        if (e.button != GLFW_MOUSE_BUTTON_LEFT) {
             return;
+        }
 
         APP->window->cursorUnlock();
 
@@ -94,8 +96,9 @@ struct ZZC_DisplayKnob : SvgKnob {
     }
 
     void onDragStart(const DragStartEvent& e) override {
-        if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+        if (e.button != GLFW_MOUSE_BUTTON_LEFT) {
             return;
+        }
 
         engine::ParamQuantity* pq = getParamQuantity();
         if (pq) {
@@ -127,6 +130,13 @@ struct ZZC_DisplayKnob : SvgKnob {
             this->valueToDraw = paramQuantity->getValue();
         }
         SvgKnob::onChange(e);
+    }
+
+    void onDoubleClick(const event::DoubleClick& e) override {
+        engine::ParamQuantity* paramQuantity = this->getParamQuantity();
+        if (paramQuantity) {
+            paramQuantity->setValue(paramQuantity->defaultValue);
+        }
     }
 
     void step() override {
@@ -162,8 +172,9 @@ struct ZZC_PhasequePatternShiftKnob : ZZC_DisplayKnob {
     }
 
     void onDragEnd(const event::DragEnd& e) override {
-        if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+        if (e.button != GLFW_MOUSE_BUTTON_LEFT) {
             return;
+        }
 
         APP->window->cursorUnlock();
 
@@ -182,6 +193,11 @@ struct ZZC_PhasequePatternShiftKnob : ZZC_DisplayKnob {
                 APP->history->push(h);
             }
         }
+    }
+
+    void onDoubleClick(const event::DoubleClick& e) override {
+        Phaseque* phaseq = static_cast<Phaseque*>(module);
+        phaseq->resetMutation();
     }
 
     void step() override {
@@ -207,8 +223,10 @@ struct ZZC_PhasequeMutaKnob : SvgKnob {
     }
 
     void onDragEnd(const event::DragEnd& e) override {
-        if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+        if (e.button != GLFW_MOUSE_BUTTON_LEFT) {
             return;
+        }
+
         APP->window->cursorUnlock();
     }
 };
@@ -217,8 +235,9 @@ struct ZZC_PhasequeAttrKnob : ZZC_DisplayKnob {
     ZZC_PhasequeAttrKnob() {}
 
     void onDragEnd(const event::DragEnd& e) override {
-        if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+        if (e.button != GLFW_MOUSE_BUTTON_LEFT) {
             return;
+        }
 
         APP->window->cursorUnlock();
 
@@ -247,8 +266,9 @@ struct ZZC_PhasequeXYDisplayWidget : XYDisplayWidget {
     ZZC_PhasequeXYDisplayWidget() {}
 
     void onDragEnd(const event::DragEnd& e) override {
-        if (e.button != GLFW_MOUSE_BUTTON_LEFT)
+        if (e.button != GLFW_MOUSE_BUTTON_LEFT) {
             return;
+        }
 
         APP->window->cursorUnlock();
 
@@ -285,6 +305,15 @@ struct ZZC_PhasequeXYDisplayWidget : XYDisplayWidget {
                 h->attr = q->attr;
                 APP->history->push(h);
             }
+        }
+    }
+
+    void onDoubleClick(const event::DoubleClick& e) override {
+        if (this->paramQuantityX) {
+            this->paramQuantityX->setValue(this->paramQuantityX->defaultValue);
+        }
+        if (this->paramQuantityY) {
+            this->paramQuantityY->setValue(this->paramQuantityY->defaultValue);
         }
     }
 };
