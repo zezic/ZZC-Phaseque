@@ -105,7 +105,11 @@ struct GridDisplay : BaseDisplayWidget {
         nvgText(args.vg, textPos.x, textPos.y, humanString.c_str(), NULL);
     }
 
-    void draw(const DrawArgs& args) override {
+    void drawLayer(const DrawArgs& args, int layer) override {
+        if (layer != 1) {
+            this->drawBackground(args);
+        }
+
         if (this->consumer->patternFlashNeg != -1) {
             this->flashes[this->consumer->patternFlashNeg] = -1.f;
         }
@@ -114,7 +118,6 @@ struct GridDisplay : BaseDisplayWidget {
             this->flashes[this->consumer->patternFlashPos] = 1.f;
         }
 
-        this->drawBackground(args);
         nvgFontSize(args.vg, 9);
         nvgFontFaceId(args.vg, font->handle);
         nvgTextAlign(args.vg, NVG_ALIGN_CENTER);
