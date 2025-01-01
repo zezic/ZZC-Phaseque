@@ -1,19 +1,18 @@
 #pragma once
-#include <algorithm> // for std:rotate
-#include <iostream>
 
-#include "ZZC.hpp"
-#include "Pattern.hpp"
-#include "MainDisplay.hpp"
-#include "GridDisplay.hpp"
-#include "helpers.hpp"
-
-#define MAX_VOICES   16
+#define MAX_VOICES 16
 #define NUM_PATTERNS 32
 
+#include <algorithm> // for std:rotate
+#include <iostream>
+#include "GridDisplay.hpp"
+#include "MainDisplay.hpp"
+#include "Pattern.hpp"
+#include "ZZC.hpp"
+#include "helpers.hpp"
+
 template<size_t c> struct ForLoop {
-    template<template<size_t> class Func> static void iterate(Module *module)
-    {
+    template<template<size_t> class Func> static void iterate(Module* module) {
         Func<c>()(module);
         if (c > 0) {
         }
@@ -22,7 +21,9 @@ template<size_t c> struct ForLoop {
 };
 
 template<> struct ForLoop<0> {
-    template<template<size_t> class Func> static void iterate(Module *module) { Func<0>()(module); }
+    template<template<size_t> class Func> static void iterate(Module* module) {
+        Func<0>()(module);
+    }
 };
 
 struct StepAttrParamQuantityBase : ParamQuantity {
@@ -65,6 +66,7 @@ struct Phaseque : Module {
         USE_COMPATIBLE_BPM_CV_PARAM,
         NUM_PARAMS
     };
+
     enum InputIds {
         CLOCK_INPUT,
         VBPS_INPUT,
@@ -92,6 +94,7 @@ struct Phaseque : Module {
         MUTA_INC_INPUT,
         NUM_INPUTS
     };
+
     enum OutputIds {
         GATE_OUTPUT,
         V_OUTPUT,
@@ -109,6 +112,7 @@ struct Phaseque : Module {
         PTRN_WRAP_OUTPUT,
         NUM_OUTPUTS
     };
+
     enum LightIds {
         TEMPO_TRACK_LED,
         ABS_MODE_LED,
@@ -145,32 +149,32 @@ struct Phaseque : Module {
         NUM_LIGHTS
     };
 
-    Pattern<8>   patterns[NUM_PATTERNS];
-    unsigned int patternIdx     = 0;
+    Pattern<8> patterns[NUM_PATTERNS];
+    unsigned int patternIdx = 0;
     unsigned int lastPatternIdx = 0;
-    Pattern<8>   pattern        = patterns[patternIdx];
-    Step        *activeStep     = nullptr;
-    Step        *lastActiveStep = nullptr;
-    int          goToRequest    = 0;
+    Pattern<8> pattern = patterns[patternIdx];
+    Step* activeStep = nullptr;
+    Step* lastActiveStep = nullptr;
+    int goToRequest = 0;
 
     dsp::SchmittTrigger clockTrigger;
-    TempoTracker        tempoTracker;
-    bool                lastClockInputState = false;
-    bool                tickedAtLastSample  = false;
+    TempoTracker tempoTracker;
+    bool lastClockInputState = false;
+    bool tickedAtLastSample = false;
 
     dsp::SchmittTrigger absModeTrigger;
-    bool                absMode = false;
+    bool absMode = false;
 
     dsp::SchmittTrigger tempoTrackButtonTrigger;
-    bool                tempoTrack = true;
+    bool tempoTrack = true;
 
     dsp::SchmittTrigger clutchButtonTrigger;
     dsp::SchmittTrigger clutchInputTrigger;
-    bool                clutch = true;
+    bool clutch = true;
 
     dsp::SchmittTrigger resetButtonTrigger;
     dsp::SchmittTrigger resetInputTrigger;
-    bool                resetPulse = false;
+    bool resetPulse = false;
 
     dsp::SchmittTrigger goToInputTrigger;
     dsp::SchmittTrigger seqInputTrigger;
@@ -186,12 +190,12 @@ struct Phaseque : Module {
     dsp::PulseGenerator retrigGapGenerator;
 
     dsp::SchmittTrigger globalGateButtonTrigger;
-    bool                globalGate         = true;
-    bool                globalGateInternal = true;
-    float               globalShift        = 0.0f;
-    float               globalLen          = 1.0f;
-    float               globalPower        = 0.f;
-    float               globalCurve        = 0.f;
+    bool globalGate = true;
+    bool globalGateInternal = true;
+    float globalShift = 0.0f;
+    float globalLen = 1.0f;
+    float globalPower = 0.f;
+    float globalCurve = 0.f;
 
     dsp::SchmittTrigger gateButtonsTriggers[NUM_STEPS];
     dsp::SchmittTrigger jumpInputsTriggers[NUM_STEPS];
@@ -217,34 +221,34 @@ struct Phaseque : Module {
     dsp::SchmittTrigger mutIncTrigger;
 
     dsp::SchmittTrigger waitButtonTrigger;
-    bool                wait = false;
+    bool wait = false;
 
     dsp::PulseGenerator ptrnStartPulseGenerator;
     dsp::PulseGenerator ptrnEndPulseGenerator;
 
-    double phase                 = 0.0;
-    double lastPhase             = 0.0;
-    double lastPhaseIn           = 0.0;
-    double lastPhaseInDelta      = 0.0;
-    bool   lastPhaseInState      = false;
-    int    samplesSinceLastReset = 0;
-    float  phaseShifted          = 0.0f;
-    float  lastPhaseShifted      = 0.0f;
-    float  phaseParam            = 0.0f;
-    float  lastPhaseParamInput   = 0.0f;
-    int    direction             = 1;
-    bool   jump                  = false;
-    float  bps                   = 2.0f;
-    float  bpm                   = 120.0f;
-    bool   bpmDisabled           = false;
+    double phase = 0.0;
+    double lastPhase = 0.0;
+    double lastPhaseIn = 0.0;
+    double lastPhaseInDelta = 0.0;
+    bool lastPhaseInState = false;
+    int samplesSinceLastReset = 0;
+    float phaseShifted = 0.0f;
+    float lastPhaseShifted = 0.0f;
+    float phaseParam = 0.0f;
+    float lastPhaseParamInput = 0.0f;
+    int direction = 1;
+    bool jump = false;
+    float bps = 2.0f;
+    float bpm = 120.0f;
+    bool bpmDisabled = false;
 
-    unsigned int resolution        = pattern.resolution;
-    float        resolutionDisplay = pattern.resolution;
-    unsigned int lastGoToRequest   = 0;
+    unsigned int resolution = pattern.resolution;
+    float resolutionDisplay = pattern.resolution;
+    unsigned int lastGoToRequest = 0;
 
-    int  polyphonyMode           = MONOPHONIC;
-    bool stepsStates[NUM_STEPS]  = {false};
-    bool unisonStates[NUM_STEPS] = {false};
+    int polyphonyMode = MONOPHONIC;
+    bool stepsStates[NUM_STEPS] = { false };
+    bool unisonStates[NUM_STEPS] = { false };
 
     dsp::ClockDivider lightDivider;
     dsp::ClockDivider buttonsDivider;
@@ -259,7 +263,7 @@ struct Phaseque : Module {
 
     /* Settings */
     bool useCompatibleBPMCV = true;
-    bool snapCV             = false;
+    bool snapCV = false;
 
     void setPolyMode(PolyphonyModes polyMode);
     void goToPattern(unsigned int targetIdx);
@@ -281,17 +285,13 @@ struct Phaseque : Module {
     void processTransport(bool phaseWasZeroed, float sampleTime);
 
     void renderStepMono();
-    void renderAttrs(simd::float_4 *ins,
-                     simd::float_4 (*attrs)[STEP_ATTRS_TOTAL][2],
-                     simd::float_4 *hits,
-                     int            blockIdx,
-                     int            chanOffset);
+    void renderAttrs(simd::float_4* ins, simd::float_4 (*attrs)[STEP_ATTRS_TOTAL][2], simd::float_4* hits, int blockIdx,
+                     int chanOffset);
     void renderPolyphonic();
     void renderUnison();
 
     struct PatternResoParamQuantity : ParamQuantity {
-        float getSmoothValue()
-        {
+        float getSmoothValue() {
             if (!module) {
                 return 0.f;
             }
@@ -303,168 +303,129 @@ struct Phaseque : Module {
             }
         }
 
-        void setSmoothValue(float value)
-        {
+        void setSmoothValue(float value) {
             if (!module) {
                 return;
             }
 
-            Phaseque *phaseq = static_cast<Phaseque *>(module);
-            value            = math::clampSafe(value, getMinValue(), getMaxValue());
+            Phaseque* phaseq = static_cast<Phaseque*>(module);
+            value = math::clampSafe(value, getMinValue(), getMaxValue());
             phaseq->setPatternReso(value);
             // APP->engine->setParam(module, paramId, value);
         }
 
-        void setValue(float value) override
-        {
+        void setValue(float value) override {
             if (!module) {
                 return;
             }
 
-            Phaseque *phaseq = static_cast<Phaseque *>(module);
-            value            = math::clampSafe(value, getMinValue(), getMaxValue());
+            Phaseque* phaseq = static_cast<Phaseque*>(module);
+            value = math::clampSafe(value, getMinValue(), getMaxValue());
             phaseq->setPatternReso(value);
             // APP->engine->setParam(module, paramId, value);
         }
     };
 
     struct PatternShiftParamQuantity : ParamQuantity {
-        void setSmoothValue(float value)
-        {
+        void setSmoothValue(float value) {
             if (!module) {
                 return;
             }
 
-            Phaseque *phaseq = static_cast<Phaseque *>(module);
-            value            = math::clampSafe(value, getMinValue(), getMaxValue());
+            Phaseque* phaseq = static_cast<Phaseque*>(module);
+            value = math::clampSafe(value, getMinValue(), getMaxValue());
             phaseq->setPatternShift(value);
             // APP->engine->setParam(module, paramId, value);
         }
 
-        void setValue(float value) override
-        {
+        void setValue(float value) override {
             if (!module) {
                 return;
             }
 
-            Phaseque *phaseq = static_cast<Phaseque *>(module);
-            value            = math::clampSafe(value, getMinValue(), getMaxValue());
+            Phaseque* phaseq = static_cast<Phaseque*>(module);
+            value = math::clampSafe(value, getMinValue(), getMaxValue());
             phaseq->setPatternShift(value);
             // APP->engine->setParam(module, paramId, value);
         }
 
-        float getValue() override
-        {
+        float getValue() override {
             if (!module) {
                 return this->defaultValue;
             }
 
-            Phaseque *phaseq = static_cast<Phaseque *>(module);
+            Phaseque* phaseq = static_cast<Phaseque*>(module);
             return phaseq->getPatternShift();
         }
     };
 
     struct PatternMutaParamQuantity : ParamQuantity {
-        void setValue(float value) override
-        {
+        void setValue(float value) override {
             if (!module) {
                 return;
             }
 
-            float     delta  = value - getValue();
-            Phaseque *phaseq = static_cast<Phaseque *>(module);
+            float delta = value - getValue();
+            Phaseque* phaseq = static_cast<Phaseque*>(module);
             phaseq->mutate(delta);
             // APP->engine->setParam(module, paramId, value);
         }
     };
 
     template<int ITEM, int ATTR> struct StepAttrParamQuantity : StepAttrParamQuantityBase {
-        StepAttrParamQuantity()
-        {
+        StepAttrParamQuantity() {
             item = ITEM;
             attr = ATTR;
         }
 
-        void setValue(float value) override
-        {
+        void setValue(float value) override {
             if (!module) {
                 return;
             }
 
-            Phaseque *phaseq = static_cast<Phaseque *>(module);
-            value            = math::clampSafe(value, getMinValue(), getMaxValue());
+            Phaseque* phaseq = static_cast<Phaseque*>(module);
+            value = math::clampSafe(value, getMinValue(), getMaxValue());
             phaseq->setStepAttrBase(item, attr, value);
             // APP->engine->setParam(module, paramId, value);
         }
 
-        float getValue() override
-        {
+        float getValue() override {
             if (!module) {
                 return this->defaultValue;
             }
 
-            Phaseque *phaseq = static_cast<Phaseque *>(module);
+            Phaseque* phaseq = static_cast<Phaseque*>(module);
             return phaseq->getStepAttrBase(item, attr);
         }
     };
 
     template<size_t size> struct StepParamConfigurator {
-        void operator()(Module *module)
-        {
+        void operator()(Module* module) {
             module->configParam(GATE_SWITCH_PARAM + size, 0.0f, 1.0f, 0.0f, "Step Gate");
-            module->configParam<StepAttrParamQuantity<size, STEP_VALUE>>(STEP_VALUE_PARAM + size,
-                                                                         -2.0f,
-                                                                         2.0f,
-                                                                         0.0f,
+            module->configParam<StepAttrParamQuantity<size, STEP_VALUE>>(STEP_VALUE_PARAM + size, -2.0f, 2.0f, 0.0f,
                                                                          "Step Value");
-            module->configParam<StepAttrParamQuantity<size, STEP_LEN>>(STEP_LEN_PARAM + size,
-                                                                       0.0f,
-                                                                       1.0f / NUM_STEPS * 2.0f,
-                                                                       1.0f / NUM_STEPS,
-                                                                       "Step Length");
-            module->configParam<StepAttrParamQuantity<size, STEP_SHIFT>>(STEP_SHIFT_PARAM + size,
-                                                                         -1.0f / NUM_STEPS,
-                                                                         1.0f / NUM_STEPS,
-                                                                         0.0f,
-                                                                         "Step Shift");
-            module->configParam<StepAttrParamQuantity<size, STEP_EXPR_IN>>(STEP_EXPR_IN_PARAM
-                                                                               + size,
-                                                                           -1.0f,
-                                                                           1.0f,
-                                                                           0.0f,
+            module->configParam<StepAttrParamQuantity<size, STEP_LEN>>(
+                STEP_LEN_PARAM + size, 0.0f, 1.0f / NUM_STEPS * 2.0f, 1.0f / NUM_STEPS, "Step Length");
+            module->configParam<StepAttrParamQuantity<size, STEP_SHIFT>>(STEP_SHIFT_PARAM + size, -1.0f / NUM_STEPS,
+                                                                         1.0f / NUM_STEPS, 0.0f, "Step Shift");
+            module->configParam<StepAttrParamQuantity<size, STEP_EXPR_IN>>(STEP_EXPR_IN_PARAM + size, -1.0f, 1.0f, 0.0f,
                                                                            "Step Expression In");
-            module->configParam<StepAttrParamQuantity<size, STEP_EXPR_CURVE>>(
-                STEP_EXPR_CURVE_PARAM + size,
-                -1.0f,
-                1.0f,
-                0.0f,
-                "Step Expression Curve");
-            module->configParam<StepAttrParamQuantity<size, STEP_EXPR_POWER>>(
-                STEP_EXPR_POWER_PARAM + size,
-                -1.0f,
-                1.0f,
-                0.0f,
-                "Step Expression Power");
-            module->configParam<StepAttrParamQuantity<size, STEP_EXPR_OUT>>(STEP_EXPR_OUT_PARAM
-                                                                                + size,
-                                                                            -1.0f,
-                                                                            1.0f,
-                                                                            0.0f,
-                                                                            "Step Expression Out");
+            module->configParam<StepAttrParamQuantity<size, STEP_EXPR_CURVE>>(STEP_EXPR_CURVE_PARAM + size, -1.0f, 1.0f,
+                                                                              0.0f, "Step Expression Curve");
+            module->configParam<StepAttrParamQuantity<size, STEP_EXPR_POWER>>(STEP_EXPR_POWER_PARAM + size, -1.0f, 1.0f,
+                                                                              0.0f, "Step Expression Power");
+            module->configParam<StepAttrParamQuantity<size, STEP_EXPR_OUT>>(STEP_EXPR_OUT_PARAM + size, -1.0f, 1.0f,
+                                                                            0.0f, "Step Expression Out");
         }
     };
 
-    Phaseque()
-    {
+    Phaseque() {
         config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
         configParam(USE_COMPATIBLE_BPM_CV_PARAM, 0.0f, 1.0f, 1.0f, "External CV Mode");
         configParam(TEMPO_TRACK_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Sync inter-beat phase with clock");
-        configParam(
-            BPM_PARAM,
-            0.0,
-            240.0,
-            120.0,
-            "Clock's BPM hint or internal tempo to use with V/OCT, V/BPS and standalone modes");
+        configParam(BPM_PARAM, 0.0, 240.0, 120.0,
+                    "Clock's BPM hint or internal tempo to use with V/OCT, V/BPS "
+                    "and standalone modes");
         configParam(PHASE_PARAM, 0.0, 1.0, 0.0, "Manual Phase Control");
         configParam(ABS_MODE_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Absolute Phase Input");
         configParam(CLUTCH_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Clutch Transport with Phase");
@@ -474,30 +435,14 @@ struct Phaseque : Module {
         configParam(GLOBAL_SHIFT_PARAM, -baseStepLen, baseStepLen, 0.0, "Global Pattern Shift");
         configParam(GLOBAL_LEN_PARAM, 0.0, 2.0, 1.0, "Global Step Length Modifier");
         configParam(SHIFT_LEFT_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Shift Pattern to the Left by 1/8");
-        configParam(SHIFT_RIGHT_SWITCH_PARAM,
-                    0.0f,
-                    1.0f,
-                    0.0f,
-                    "Shift Pattern to the Right by 1/8");
+        configParam(SHIFT_RIGHT_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Shift Pattern to the Right by 1/8");
         configParam(QNT_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Quantize Steps Position");
         configParam(LEN_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Quantize Steps Length");
         configParam(REV_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Reverse Pattern");
         configParam(FLIP_SWITCH_PARAM, 0.0f, 1.0f, 0.0f, "Flip Pattern");
-        configParam<PatternResoParamQuantity>(PATTERN_RESO_PARAM,
-                                              1.0f,
-                                              99.0f,
-                                              8.0f,
-                                              "Pattern Resolution");
-        configParam<PatternShiftParamQuantity>(PATTERN_SHIFT_PARAM,
-                                               -1.0f,
-                                               1.0f,
-                                               0.0f,
-                                               "Pattern Shift");
-        configParam<PatternMutaParamQuantity>(PATTERN_MUTA_PARAM,
-                                              -INFINITY,
-                                              INFINITY,
-                                              0.0f,
-                                              "Pattern Mutation");
+        configParam<PatternResoParamQuantity>(PATTERN_RESO_PARAM, 1.0f, 99.0f, 8.0f, "Pattern Resolution");
+        configParam<PatternShiftParamQuantity>(PATTERN_SHIFT_PARAM, -1.0f, 1.0f, 0.0f, "Pattern Shift");
+        configParam<PatternMutaParamQuantity>(PATTERN_MUTA_PARAM, -INFINITY, INFINITY, 0.0f, "Pattern Mutation");
 
         configInput(CLOCK_INPUT, "Clock");
         configInput(VBPS_INPUT, "V/OCT → BPM");
@@ -556,16 +501,15 @@ struct Phaseque : Module {
         this->patternIdx = 0;
         takeOutCurrentPattern();
         lights[TEMPO_TRACK_LED].value = tempoTrack ? 1.0f : 0.0f;
-        lights[ABS_MODE_LED].value    = absMode ? 1.0f : 0.0f;
-        lights[CLUTCH_LED].value      = clutch ? 1.0f : 0.0f;
+        lights[ABS_MODE_LED].value = absMode ? 1.0f : 0.0f;
+        lights[CLUTCH_LED].value = clutch ? 1.0f : 0.0f;
         lightDivider.setDivision(256);
         buttonsDivider.setDivision(256);
     }
 
-    void process(const ProcessArgs &args) override;
+    void process(const ProcessArgs& args) override;
 
-    void randomizeAll()
-    {
+    void randomizeAll() {
         storeCurrentPattern();
 
         for (int i = 0; i < NUM_PATTERNS; i++) {
@@ -582,8 +526,7 @@ struct Phaseque : Module {
         this->gridDisplayConsumer->consumed = false;
     }
 
-    void randomizeAllReso()
-    {
+    void randomizeAllReso() {
         storeCurrentPattern();
 
         for (int i = 0; i < NUM_PATTERNS; i++) {
@@ -593,55 +536,49 @@ struct Phaseque : Module {
         takeOutCurrentPattern();
     }
 
-    void mutate(float factor)
-    {
+    void mutate(float factor) {
         this->pattern.mutate(factor);
         if (factor < 0.f) {
             this->showCustomSteps();
         }
     }
 
-    void mutateStep(unsigned int blockIdx, simd::float_4 mask, float factor)
-    {
+    void mutateStep(unsigned int blockIdx, simd::float_4 mask, float factor) {
         this->pattern.mutateBlock(blockIdx, mask, factor);
         if (factor < 0.f) {
             this->showCustomSteps();
         }
     }
 
-    void resetMutation()
-    {
+    void resetMutation() {
         this->pattern.resetMutation();
         this->showCustomSteps();
     }
 
-    void resetStepsMutation(unsigned int blockIdx, simd::float_4 mask)
-    {
+    void resetStepsMutation(unsigned int blockIdx, simd::float_4 mask) {
         this->pattern.resetBlockMutation(blockIdx, mask);
         this->showCustomSteps();
     }
 
-    void bakeMutation() { this->pattern.bakeMutation(); }
+    void bakeMutation() {
+        this->pattern.bakeMutation();
+    }
 
-    void showCustomSteps()
-    {
+    void showCustomSteps() {
         if (this->gridDisplayConsumer) {
-            this->gridDisplayConsumer->dirtyMask.set(this->patternIdx,
-                                                     this->pattern.hasCustomSteps());
+            this->gridDisplayConsumer->dirtyMask.set(this->patternIdx, this->pattern.hasCustomSteps());
         }
     }
 
-    float getStepAttrBase(int stepNumber, int attr)
-    {
-        unsigned int blockIdx       = stepNumber / this->pattern.blockSize;
+    float getStepAttrBase(int stepNumber, int attr) {
+        unsigned int blockIdx = stepNumber / this->pattern.blockSize;
         unsigned int stepInBlockIdx = stepNumber % this->pattern.blockSize;
 
         return this->pattern.stepBases[attr][blockIdx][stepInBlockIdx];
     }
 
-    void setStepAttrBase(int stepNumber, int attr, float target)
-    {
-        unsigned int blockIdx       = stepNumber / this->pattern.blockSize;
+    void setStepAttrBase(int stepNumber, int attr, float target) {
+        unsigned int blockIdx = stepNumber / this->pattern.blockSize;
         unsigned int stepInBlockIdx = stepNumber % this->pattern.blockSize;
 
         this->pattern.stepBases[attr][blockIdx][stepInBlockIdx] = target;
@@ -654,77 +591,74 @@ struct Phaseque : Module {
         this->showCustomSteps();
     }
 
-    void setPatternReso(float target)
-    {
+    void setPatternReso(float target) {
         this->pattern.resolution = std::round(clamp(target, 1.0f, 99.0f));
     }
 
-    void resetPatternReso() { this->pattern.resetResolution(); }
+    void resetPatternReso() {
+        this->pattern.resetResolution();
+    }
 
-    float getPatternShift() { return this->pattern.getShift(); }
-    void  setPatternShift(float value) { this->pattern.setShift(value); }
-    void  resetPatternShift() { this->pattern.setShift(0.f); }
+    float getPatternShift() {
+        return this->pattern.getShift();
+    }
 
-    void copyToNext()
-    {
+    void setPatternShift(float value) {
+        this->pattern.setShift(value);
+    }
+
+    void resetPatternShift() {
+        this->pattern.setShift(0.f);
+    }
+
+    void copyToNext() {
         unsigned int target = eucMod(this->patternIdx + 1, NUM_PATTERNS);
         this->copyTo(target);
     }
 
-    void copyToPrev()
-    {
+    void copyToPrev() {
         unsigned int target = eucMod(this->patternIdx - 1, NUM_PATTERNS);
         this->copyTo(target);
     }
 
-    void copyTo(unsigned int target)
-    {
-        std::memcpy(this->patterns[target].stepBases,
-                    this->pattern.stepBases,
-                    sizeof(this->pattern.stepBases));
-        std::memcpy(this->patterns[target].stepMutas,
-                    this->pattern.stepMutas,
-                    sizeof(this->pattern.stepMutas));
-        std::memcpy(this->patterns[target].stepGates,
-                    this->pattern.stepGates,
-                    sizeof(this->pattern.stepGates));
+    void copyTo(unsigned int target) {
+        std::memcpy(this->patterns[target].stepBases, this->pattern.stepBases, sizeof(this->pattern.stepBases));
+        std::memcpy(this->patterns[target].stepMutas, this->pattern.stepMutas, sizeof(this->pattern.stepMutas));
+        std::memcpy(this->patterns[target].stepGates, this->pattern.stepGates, sizeof(this->pattern.stepGates));
         patterns[target].resolution = pattern.resolution;
     }
 
-    void copyResoToAll()
-    {
+    void copyResoToAll() {
         for (unsigned int i = 0; i < NUM_PATTERNS; i++) {
             patterns[i].resolution = pattern.resolution;
         }
     }
 
-    void storeCurrentPattern() { this->patterns[this->patternIdx] = this->pattern; }
+    void storeCurrentPattern() {
+        this->patterns[this->patternIdx] = this->pattern;
+    }
 
-    void takeOutCurrentPattern()
-    {
+    void takeOutCurrentPattern() {
         this->pattern = this->patterns[patternIdx];
         this->pattern.applyGlobalShift(this->globalShift);
         this->pattern.applyGlobalLen(this->globalLen);
         this->renderParamQuantities();
     }
 
-    void renderParamQuantities()
-    {
+    void renderParamQuantities() {
         this->paramQuantities[PATTERN_RESO_PARAM]->setValue(this->pattern.resolution);
-        this->paramQuantities[PATTERN_SHIFT_PARAM]->setValue(this->pattern.shift
-                                                             / this->pattern.baseStepLen);
+        this->paramQuantities[PATTERN_SHIFT_PARAM]->setValue(this->pattern.shift / this->pattern.baseStepLen);
         for (unsigned int stepIdx = 0; stepIdx < this->pattern.size; stepIdx++) {
-            unsigned int blockIdx       = stepIdx / this->pattern.blockSize;
+            unsigned int blockIdx = stepIdx / this->pattern.blockSize;
             unsigned int stepInBlockIdx = stepIdx % this->pattern.blockSize;
             for (unsigned int attrIdx = 0; attrIdx < STEP_ATTRS_TOTAL; attrIdx++) {
-                paramQuantities[STEP_VALUE_PARAM + stepIdx + attrIdx * this->pattern.size]
-                    ->setValue(this->pattern.stepBases[attrIdx][blockIdx][stepInBlockIdx]);
+                paramQuantities[STEP_VALUE_PARAM + stepIdx + attrIdx * this->pattern.size]->setValue(
+                    this->pattern.stepBases[attrIdx][blockIdx][stepInBlockIdx]);
             }
         }
     }
 
-    void onReset() override
-    {
+    void onReset() override {
         this->globalGateInternal = true;
         for (int i = 0; i < NUM_PATTERNS; i++) {
             this->patterns[i].init();
@@ -735,30 +669,28 @@ struct Phaseque : Module {
         this->polyphonyMode = PolyphonyModes::MONOPHONIC;
     }
 
-    void onRandomize() override
-    {
+    void onRandomize() override {
         this->pattern.randomize();
         this->renderParamQuantities();
     }
 
-    json_t *dataToJson() override
-    {
+    json_t* dataToJson() override {
         this->storeCurrentPattern();
-        json_t *rootJ = json_object();
+        json_t* rootJ = json_object();
         json_object_set_new(rootJ, "tempoTrack", json_boolean(tempoTrack));
         json_object_set_new(rootJ, "absMode", json_boolean(absMode));
         json_object_set_new(rootJ, "clutch", json_boolean(clutch));
         json_object_set_new(rootJ, "globalGateInternal", json_boolean(globalGateInternal));
-        json_object_set_new(rootJ,
-                            "patternIdx",
+        json_object_set_new(rootJ, "patternIdx",
                             json_integer(patternIdx + 1)); // +1 for compatibility with v1.1.2
         json_object_set_new(rootJ, "wait", json_boolean(wait));
         json_object_set_new(rootJ, "polyphonyMode", json_integer(polyphonyMode));
         json_object_set_new(rootJ, "useCompatibleBPMCV", json_boolean(useCompatibleBPMCV));
         json_object_set_new(rootJ, "snapCV", json_boolean(snapCV));
 
-        json_t *patternsJ = json_array();
-        json_array_append_new(patternsJ, json_null()); // Dummy for compatibility with v1.1.2
+        json_t* patternsJ = json_array();
+        json_array_append_new(patternsJ,
+                              json_null()); // Dummy for compatibility with v1.1.2
 
         for (int i = 0; i < NUM_PATTERNS; i++) {
             if (patterns[i].isClean()) {
@@ -773,26 +705,25 @@ struct Phaseque : Module {
         return rootJ;
     }
 
-    void dataFromJson(json_t *rootJ) override
-    {
-        json_t *tempoTrackJ         = json_object_get(rootJ, "tempoTrack");
-        json_t *absModeJ            = json_object_get(rootJ, "absMode");
-        json_t *clutchJ             = json_object_get(rootJ, "clutch");
-        json_t *globalGateInternalJ = json_object_get(rootJ, "globalGateInternal");
+    void dataFromJson(json_t* rootJ) override {
+        json_t* tempoTrackJ = json_object_get(rootJ, "tempoTrack");
+        json_t* absModeJ = json_object_get(rootJ, "absMode");
+        json_t* clutchJ = json_object_get(rootJ, "clutch");
+        json_t* globalGateInternalJ = json_object_get(rootJ, "globalGateInternal");
 
-        json_t *patternsJ         = json_object_get(rootJ, "patterns");
-        bool    compatibilityMode = false; // Be compatible with v1.1.2
+        json_t* patternsJ = json_object_get(rootJ, "patterns");
+        bool compatibilityMode = false; // Be compatible with v1.1.2
         if (patternsJ) {
-            size_t arraySize  = json_array_size(patternsJ);
+            size_t arraySize = json_array_size(patternsJ);
             compatibilityMode = arraySize == 33;
         }
 
-        json_t *patternIdxJ = json_object_get(rootJ, "patternIdx");
+        json_t* patternIdxJ = json_object_get(rootJ, "patternIdx");
 
-        json_t *waitJ               = json_object_get(rootJ, "wait");
-        json_t *polyphonyModeJ      = json_object_get(rootJ, "polyphonyMode");
-        json_t *useCompatibleBPMCVJ = json_object_get(rootJ, "useCompatibleBPMCV");
-        json_t *snapCVJ             = json_object_get(rootJ, "snapCV");
+        json_t* waitJ = json_object_get(rootJ, "wait");
+        json_t* polyphonyModeJ = json_object_get(rootJ, "polyphonyMode");
+        json_t* useCompatibleBPMCVJ = json_object_get(rootJ, "useCompatibleBPMCV");
+        json_t* snapCVJ = json_object_get(rootJ, "snapCV");
 
         if (tempoTrackJ) {
             this->tempoTrack = json_boolean_value(tempoTrackJ);
@@ -841,11 +772,10 @@ struct Phaseque : Module {
 
         if (patternsJ) {
             size_t arraySize = json_array_size(patternsJ);
-            int    offset
-                = arraySize
-                  - NUM_PATTERNS; // For compatibility with v1.1.2 we will take 32 last arrays
+            int offset = arraySize - NUM_PATTERNS; // For compatibility with v1.1.2
+            // we will take 32 last arrays
             for (unsigned int i = offset; i < arraySize && (i - offset) < NUM_PATTERNS; i++) {
-                json_t *patternJ = json_array_get(patternsJ, i);
+                json_t* patternJ = json_array_get(patternsJ, i);
                 if (!json_is_null(patternJ)) {
                     this->patterns[i - offset].dataFromJson(patternJ, compatibilityMode);
                 }
