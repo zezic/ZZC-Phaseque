@@ -1011,7 +1011,7 @@ void Phaseque::process(const ProcessArgs& args) {
             outputs[STEP_GATE_OUTPUT + this->pattern.activeStepIdx].setVoltage(10.f);
         }
 
-        bool retrigGap = retrigGapGenerator.process(sampleTime);
+        bool retrigGap = retrigGapGate && retrigGapGenerator.process(sampleTime);
         outputs[GATE_OUTPUT].setVoltage(this->clutch && this->pattern.hasActiveStep && !retrigGap ? 10.f : 0.f);
     } else if (this->polyphonyMode == PolyphonyModes::POLYPHONIC) {
         this->pattern.findStepsForPhase(this->phaseShifted, this->globalGate);
