@@ -188,7 +188,7 @@ struct ZZC_PhasequePatternShiftKnob : ZZC_DisplayKnob {
 
     void onDoubleClick(const event::DoubleClick& e) override {
         Phaseque* phaseq = static_cast<Phaseque*>(module);
-        phaseq->resetMutation();
+        phaseq->resetPatternShift();
     }
 
     void step() override {
@@ -219,6 +219,11 @@ struct ZZC_PhasequeMutaKnob : SvgKnob {
         }
 
         APP->window->cursorUnlock();
+    }
+
+    void onDoubleClick(const event::DoubleClick& e) override {
+        Phaseque* phaseq = static_cast<Phaseque*>(module);
+        phaseq->resetMutation();
     }
 };
 
