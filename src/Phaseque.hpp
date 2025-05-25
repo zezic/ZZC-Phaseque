@@ -291,29 +291,6 @@ struct Phaseque : Module {
     void renderUnison();
 
     struct PatternResoParamQuantity : ParamQuantity {
-        float getSmoothValue() {
-            if (!module) {
-                return 0.f;
-            }
-
-            if (smoothEnabled) {
-                return APP->engine->getParamSmoothValue(module, paramId);
-            } else {
-                return APP->engine->getParamValue(module, paramId);
-            }
-        }
-
-        void setSmoothValue(float value) {
-            if (!module) {
-                return;
-            }
-
-            Phaseque* phaseq = static_cast<Phaseque*>(module);
-            value = math::clampSafe(value, getMinValue(), getMaxValue());
-            phaseq->setPatternReso(value);
-            // APP->engine->setParam(module, paramId, value);
-        }
-
         void setValue(float value) override {
             if (!module) {
                 return;
@@ -322,7 +299,7 @@ struct Phaseque : Module {
             Phaseque* phaseq = static_cast<Phaseque*>(module);
             value = math::clampSafe(value, getMinValue(), getMaxValue());
             phaseq->setPatternReso(value);
-            // APP->engine->setParam(module, paramId, value);
+            APP->engine->setParamValue(module, paramId, value);
         }
     };
 
