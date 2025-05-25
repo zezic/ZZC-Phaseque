@@ -345,7 +345,11 @@ struct Phaseque : Module {
             float delta = value - getValue();
             Phaseque* phaseq = static_cast<Phaseque*>(module);
             phaseq->mutate(delta);
-            // APP->engine->setParam(module, paramId, value);
+            APP->engine->setParamValue(module, paramId, value);
+        }
+
+        std::string getDisplayValueString() override {
+            return "";
         }
     };
 
