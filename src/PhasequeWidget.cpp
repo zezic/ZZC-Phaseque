@@ -239,6 +239,9 @@ void PhasequeWidget::appendContextMenu(Menu* menu) {
     menu->addChild(phaseqClearPatternItem);
     menu->addChild(new MenuSeparator());
 
+    menu->addChild(createBoolPtrMenuItem("Retrigger Gate between active steps", "", &phaseq->retrigGapGate));
+    menu->addChild(new MenuSeparator());
+
     PolyModeItem* polyModeItem = new PolyModeItem;
     polyModeItem->text = "Polyphony";
     polyModeItem->rightText = RIGHT_ARROW;

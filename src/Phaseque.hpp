@@ -264,6 +264,7 @@ struct Phaseque : Module {
     /* Settings */
     bool useCompatibleBPMCV = true;
     bool snapCV = false;
+    bool retrigGapGate = true;
 
     void setPolyMode(PolyphonyModes polyMode);
     void goToPattern(unsigned int targetIdx);
@@ -667,6 +668,7 @@ struct Phaseque : Module {
         this->patternIdx = 0;
         this->takeOutCurrentPattern();
         this->polyphonyMode = PolyphonyModes::MONOPHONIC;
+        this->retrigGapGate = true;
     }
 
     void onRandomize() override {
@@ -687,6 +689,7 @@ struct Phaseque : Module {
         json_object_set_new(rootJ, "polyphonyMode", json_integer(polyphonyMode));
         json_object_set_new(rootJ, "useCompatibleBPMCV", json_boolean(useCompatibleBPMCV));
         json_object_set_new(rootJ, "snapCV", json_boolean(snapCV));
+        json_object_set_new(rootJ, "retrigGapGate", json_boolean(retrigGapGate));
 
         json_t* patternsJ = json_array();
         json_array_append_new(patternsJ,
@@ -724,6 +727,7 @@ struct Phaseque : Module {
         json_t* polyphonyModeJ = json_object_get(rootJ, "polyphonyMode");
         json_t* useCompatibleBPMCVJ = json_object_get(rootJ, "useCompatibleBPMCV");
         json_t* snapCVJ = json_object_get(rootJ, "snapCV");
+        json_t* retrigGapGateJ = json_object_get(rootJ, "retrigGapGate");
 
         if (tempoTrackJ) {
             this->tempoTrack = json_boolean_value(tempoTrackJ);
@@ -768,6 +772,10 @@ struct Phaseque : Module {
 
         if (snapCVJ) {
             snapCV = json_boolean_value(snapCVJ);
+        }
+
+        if (retrigGapGateJ) {
+            retrigGapGate = json_boolean_value(retrigGapGateJ);
         }
 
         if (patternsJ) {
