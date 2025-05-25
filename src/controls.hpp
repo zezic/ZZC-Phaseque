@@ -21,15 +21,6 @@ struct ZZC_PhasequePatternResoKnob : SvgKnob {
         maxAngle = M_PI * 4;
     }
 
-    void onDragMove(const DragMoveEvent& e) override {
-        SvgKnob::onDragMove(e);
-        engine::ParamQuantity* pq = getParamQuantity();
-        if (pq) {
-            auto val = pq->getValue();
-            pq->setValue(val);
-        }
-    }
-
     void onDragStart(const DragStartEvent& e) override {
         if (e.button != GLFW_MOUSE_BUTTON_LEFT) {
             return;
