@@ -2,7 +2,7 @@
   "slug": "ZZC-Phaseque",
   "name": "ZZC Phaseque",
   "brand": "ZZC",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "license": "proprietary",
   "author": "Sergey Ukolov",
   "authorEmail": "zezic51@yandex.ru",
@@ -17,10 +17,7 @@
       "slug": "Phaseque",
       "name": "Phaseque",
       "description": "Phase-Driven Sequencer",
-      "tags": [
-        "Sequencer",
-        "Polyphonic"
-      ]
+      "tags": ["Sequencer", "Polyphonic"]
     }
   ]
 }
