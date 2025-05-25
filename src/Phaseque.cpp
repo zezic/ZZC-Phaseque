@@ -976,7 +976,7 @@ void Phaseque::process(const ProcessArgs& args) {
     outputs[PTRN_END_OUTPUT].setVoltage(ptrnEndPulseGenerator.process(sampleTime) ? 10.0f : 0.0f);
     outputs[PTRN_WRAP_OUTPUT].setVoltage(std::max(outputs[PTRN_START_OUTPUT].value, outputs[PTRN_END_OUTPUT].value));
 
-    float voltsForPattern = (patternIdx - 1) * 1.0f / 12.0f;
+    float voltsForPattern = patternIdx * 1.0f / 12.0f;
     outputs[PTRN_OUTPUT].setVoltage(voltsForPattern);
 
     if (patternIdx != lastPatternIdx) {
