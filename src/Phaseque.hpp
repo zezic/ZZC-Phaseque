@@ -491,6 +491,25 @@ struct Phaseque : Module {
 
     void process(const ProcessArgs& args) override;
 
+    void randomize(unsigned int idx ) {
+        if (idx == this->patternIdx) {
+            storeCurrentPattern();
+        }
+
+        patterns[idx].randomize();
+
+        if (idx == this->patternIdx) {
+        takeOutCurrentPattern();
+        }
+
+        if (!this->gridDisplayConsumer) {
+            return;
+        }
+
+        this->gridDisplayConsumer->dirtyMask.set();
+        this->gridDisplayConsumer->consumed = false;
+    }
+
     void randomizeAll() {
         storeCurrentPattern();
 
@@ -607,6 +626,13 @@ struct Phaseque : Module {
         std::memcpy(this->patterns[target].stepBases, this->pattern.stepBases, sizeof(this->pattern.stepBases));
         std::memcpy(this->patterns[target].stepMutas, this->pattern.stepMutas, sizeof(this->pattern.stepMutas));
         std::memcpy(this->patterns[target].stepGates, this->pattern.stepGates, sizeof(this->pattern.stepGates));
+        patterns[target].resolution = pattern.resolution;
+    }
+
+    void copyTo(unsigned int source, unsigned int target) {
+        std::memcpy(this->patterns[target].stepBases, this->patterns[source].stepBases, sizeof(this->patterns[source].stepBases));
+        std::memcpy(this->patterns[target].stepMutas, this->patterns[source].stepMutas, sizeof(this->patterns[source].stepMutas));
+        std::memcpy(this->patterns[target].stepGates, this->patterns[source].stepGates, sizeof(this->patterns[source].stepGates));
         patterns[target].resolution = pattern.resolution;
     }
 

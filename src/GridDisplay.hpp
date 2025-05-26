@@ -26,6 +26,13 @@ struct GridDisplayProducer {
     bool hasNextPatternRequest = false;
     int patternFlashPos = 0;
     int patternFlashNeg = 0;
+
+    unsigned int copyPatternSourceRequest = 0;
+    unsigned int copyPatternTargetRequest = 0;
+    bool hasCopyPatternRequest = false;
+
+    unsigned int randomizePatternRequest = 0;
+    bool hasRandomizePatternRequest = false;
 };
 
 struct GridDisplay : BaseDisplayWidget {
@@ -137,6 +144,8 @@ struct GridDisplayWidget : widget::OpaqueWidget {
 
     std::shared_ptr<GridDisplayConsumer> consumer;
     std::shared_ptr<GridDisplayProducer> producer;
+    unsigned int copyPatternSource;
+    bool hasCopyPatternSource = false;
 
     widget::FramebufferWidget* fb;
     GridDisplay* pd;
@@ -201,12 +210,69 @@ struct GridDisplayWidget : widget::OpaqueWidget {
             }
             this->producer->goToRequest = targetIdxInt;
             this->producer->hasGoToRequest = true;
+            this->hasCopyPatternSource = false;
         } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+            createContextMenu(targetIdxInt);
+        }
+    }
+
+    void createContextMenu(unsigned int targetIdxInt) {
+        ui::Menu *menu = createMenu();
+        menu->addChild(createMenuLabel(string::f("Pattern %i", targetIdxInt + 1)));
+        menu->addChild(new MenuSeparator);
+
+        menu->addChild(createMenuItem("Set As Next Pattern", "", [=] {
             if (this->producer->hasNextPatternRequest) {
                 return;
             }
             this->producer->nextPatternRequest = targetIdxInt;
             this->producer->hasNextPatternRequest = true;
+        }));
+
+        menu->addChild(new MenuSeparator);
+
+        menu->addChild(createMenuItem("Copy To Next", "", [=] {
+            if (this->producer->hasCopyPatternRequest) {
+                return;
+            }
+            this->producer->copyPatternSourceRequest = targetIdxInt;
+            this->producer->copyPatternTargetRequest = this->consumer->currentPatternGoTo;
+            this->producer->hasCopyPatternRequest = true;
+        }));
+
+        menu->addChild(createMenuItem(string::f("Copy To Pattern %i", eucMod(targetIdxInt + 1, NUM_PATTERNS) + 1), "", [=] {
+            if (this->producer->hasCopyPatternRequest) {
+                return;
+            }
+            this->producer->copyPatternSourceRequest = targetIdxInt;
+            this->producer->copyPatternTargetRequest = eucMod(targetIdxInt + 1, NUM_PATTERNS);
+            this->producer->hasCopyPatternRequest = true;
+        }));
+
+        menu->addChild(createMenuItem("Copy", "", [=] {
+            this->copyPatternSource = targetIdxInt;
+            this->hasCopyPatternSource = true;
+        }));
+
+        if (this->hasCopyPatternSource) {
+            menu->addChild(createMenuItem(string::f("Paste From Pattern %i", this->copyPatternSource + 1), "", [=] {
+                if (this->producer->hasCopyPatternRequest) {
+                    return;
+                }
+                this->producer->copyPatternSourceRequest = this->copyPatternSource;
+                this->producer->copyPatternTargetRequest = targetIdxInt;
+                this->producer->hasCopyPatternRequest = true;
+            }));
         }
+
+        menu->addChild(new MenuSeparator);
+
+        menu->addChild(createMenuItem("Randomize", "", [=] {
+            if (this->producer->hasRandomizePatternRequest) {
+                return;
+            }
+            this->producer->randomizePatternRequest = targetIdxInt;
+            this->producer->hasRandomizePatternRequest = true;
+        }));
     }
 };

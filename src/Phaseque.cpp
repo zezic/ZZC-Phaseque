@@ -127,6 +127,21 @@ void Phaseque::processPatternNav() {
         }
     }
 
+    if (this->gridDisplayProducer->hasCopyPatternRequest) {
+        unsigned int copyPatternSource = this->gridDisplayProducer->copyPatternSourceRequest;
+        unsigned int copyPatternTarget = this->gridDisplayProducer->copyPatternTargetRequest;
+        this->gridDisplayProducer->hasCopyPatternRequest = false;
+        if (copyPatternSource != copyPatternTarget) {
+            this->copyTo(copyPatternSource, copyPatternTarget);
+        }
+    }
+    
+    if (this->gridDisplayProducer->hasRandomizePatternRequest) {
+        unsigned int randomizePatternRequest = this->gridDisplayProducer->randomizePatternRequest;
+        this->gridDisplayProducer->hasRandomizePatternRequest = false;
+        this->randomize(randomizePatternRequest);
+    }
+
     if (this->wait) {
         return;
     }
