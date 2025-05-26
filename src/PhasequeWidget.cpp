@@ -229,6 +229,7 @@ void PhasequeWidget::appendContextMenu(Menu* menu) {
     menu->addChild(phaseqCopyToNextItem);
     menu->addChild(phaseqCopyToPrevItem);
     menu->addChild(new MenuSeparator());
+    menu->addChild(createMenuItem("Copy To All Patterns", "", [=] { phaseq->copyToAll(); }));
     menu->addChild(phaseqCopyResoItem);
     menu->addChild(new MenuSeparator());
     menu->addChild(phaseqRndAllItem);

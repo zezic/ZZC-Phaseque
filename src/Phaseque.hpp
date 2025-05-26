@@ -603,6 +603,12 @@ struct Phaseque : Module {
         this->copyTo(target);
     }
 
+    void copyToAll() {
+        for (unsigned int i = 0; i < NUM_PATTERNS; i++) {
+            this->copyTo(i);
+        }
+    }
+
     void copyTo(unsigned int target) {
         std::memcpy(this->patterns[target].stepBases, this->pattern.stepBases, sizeof(this->pattern.stepBases));
         std::memcpy(this->patterns[target].stepMutas, this->pattern.stepMutas, sizeof(this->pattern.stepMutas));
