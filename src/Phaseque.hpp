@@ -499,7 +499,7 @@ struct Phaseque : Module {
         patterns[idx].randomize();
 
         if (idx == this->patternIdx) {
-        takeOutCurrentPattern();
+            takeOutCurrentPattern();
         }
 
         if (!this->gridDisplayConsumer) {

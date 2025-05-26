@@ -231,7 +231,7 @@ struct GridDisplayWidget : widget::OpaqueWidget {
 
         menu->addChild(new MenuSeparator);
 
-        menu->addChild(createMenuItem("Copy To Next", "", [=] {
+        menu->addChild(createMenuItem(string::f("Copy To Next Pattern %i", this->consumer->currentPatternGoTo + 1), "", [=] {
             if (this->producer->hasCopyPatternRequest) {
                 return;
             }
@@ -240,21 +240,23 @@ struct GridDisplayWidget : widget::OpaqueWidget {
             this->producer->hasCopyPatternRequest = true;
         }));
 
-        menu->addChild(createMenuItem(string::f("Copy To Pattern %i", eucMod(targetIdxInt + 1, NUM_PATTERNS) + 1), "", [=] {
-            if (this->producer->hasCopyPatternRequest) {
-                return;
-            }
-            this->producer->copyPatternSourceRequest = targetIdxInt;
-            this->producer->copyPatternTargetRequest = eucMod(targetIdxInt + 1, NUM_PATTERNS);
-            this->producer->hasCopyPatternRequest = true;
-        }));
+        if (targetIdxInt != this->consumer->currentPatternGoTo) {
+            menu->addChild(createMenuItem(string::f("Copy To Pattern %i", eucMod(targetIdxInt + 1, NUM_PATTERNS) + 1), "", [=] {
+                if (this->producer->hasCopyPatternRequest) {
+                    return;
+                }
+                this->producer->copyPatternSourceRequest = targetIdxInt;
+                this->producer->copyPatternTargetRequest = eucMod(targetIdxInt + 1, NUM_PATTERNS);
+                this->producer->hasCopyPatternRequest = true;
+            }));
+        }
 
         menu->addChild(createMenuItem("Copy", "", [=] {
             this->copyPatternSource = targetIdxInt;
             this->hasCopyPatternSource = true;
         }));
 
-        if (this->hasCopyPatternSource) {
+        if (this->hasCopyPatternSource && this->copyPatternSource != targetIdxInt) {
             menu->addChild(createMenuItem(string::f("Paste From Pattern %i", this->copyPatternSource + 1), "", [=] {
                 if (this->producer->hasCopyPatternRequest) {
                     return;
