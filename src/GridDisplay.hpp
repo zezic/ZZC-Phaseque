@@ -240,7 +240,7 @@ struct GridDisplayWidget : widget::OpaqueWidget {
             this->producer->hasCopyPatternRequest = true;
         }));
 
-        if (eucMod(targetIdxInt + 1, NUM_PATTERNS) != this->consumer->currentPatternGoTo) {
+        if ((unsigned int) eucMod(targetIdxInt + 1, NUM_PATTERNS) != this->consumer->currentPatternGoTo) {
             menu->addChild(createMenuItem(string::f("Copy To Pattern %i", eucMod(targetIdxInt + 1, NUM_PATTERNS) + 1), "", [=] {
                 if (this->producer->hasCopyPatternRequest) {
                     return;
